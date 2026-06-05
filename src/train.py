@@ -24,6 +24,15 @@ def now_to_str():
 
 
 def train(cfg):
+    seed = int(cfg.get("seed", 42))
+    try:
+        import ray.train
+
+        seed = seed + ray.train.get_context().get_world_rank()
+    except Exception:
+        pass
+    L.seed_everything(seed, workers=True)
+
     # Set precision to use tensor cores - highest | high | medium
     torch.set_float32_matmul_precision(cfg.get("fp32_matmul_precision", "high"))
     # Disable MHA Fast path (in this version it can NaN because of left-padding)
@@ -84,7 +93,9 @@ def main(cfg: DictConfig) -> Optional[float]:
     )
 
     ray_datasets = hydra.utils.instantiate(cfg.data.ray_datasets, paths=cfg.paths)
-    name = f"{cfg.task_name}_{now_to_str()}"
+    category = cfg.data.ray_datasets.get("category", "unknown")
+    seed = cfg.get("seed", 42)
+    name = f"{cfg.task_name}_{category}_seed{seed}_{now_to_str()}"
 
     cfg.trainer.logger.name = name
 

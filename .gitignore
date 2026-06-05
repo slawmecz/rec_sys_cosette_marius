@@ -1,0 +1,28 @@
+# datasets and training artifacts (keep under DATA_ROOT/OUTPUT_ROOT on scratch when possible)
+datasets/
+data/
+amazon-2014/
+amazon-2023/
+outputs/
+results/
+models/
+wandb/
+*.ckpt
+*.pkl
+
+# python / hydra / ray
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.hydra/
+.venv/
+*.egg-info/
+
+# logs and env
+*.log
+.env
+jobs/wandb.env
+.DS_Store
+
+# cursor (if ever created inside repo)
+.cursor/
