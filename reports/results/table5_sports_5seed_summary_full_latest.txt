@@ -1,0 +1,11 @@
+Amazon 2014 Sports and Outdoors — SASRec++ test metrics (full)
+Generated: 2026-06-06T00:44:10
+Expected seeds: [42, 43, 44, 45, 46]
+Completed seeds: [42, 43, 44, 45, 46] (5/5)
+
+Table 5 style — paper vs ours (mean ± std on test)
+
+method           | seed                | R@5         | NDCG@5      | R@10        | NDCG@10    
+-----------------+---------------------+-------------+-------------+-------------+------------
+SASRec++ (paper) | mean ± std (5 runs) | 4.37% ±0.09 | 2.96% ±0.05 | 6.44% ±0.10 | 3.62% ±0.04
+SASRec++ (ours)  | mean ± std (5 runs) | 3.08% ±0.10 | 2.03% ±0.07 | 4.76% ±0.12 | 2.56% ±0.07

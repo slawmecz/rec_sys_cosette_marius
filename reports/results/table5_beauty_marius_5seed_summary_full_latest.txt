@@ -1,0 +1,11 @@
+Amazon 2014 Beauty — MARIUS (COSETTE) test metrics (full)
+Generated: 2026-06-06T19:55:10
+Expected seeds: [42, 43, 44, 45, 46]
+Completed seeds: [42, 43, 44, 45, 46] (5/5)
+
+Table 5 style — paper vs ours (mean ± std on test)
+
+method                 | seed                | R@5         | NDCG@5      | R@10         | NDCG@10    
+-----------------------+---------------------+-------------+-------------+--------------+------------
+MARIUS (COSETTE) paper | mean ± std (5 runs) | 6.58% ±0.09 | 4.35% ±0.07 | 10.02% ±0.08 | 5.46% ±0.05
+MARIUS (COSETTE) ours  | mean ± std (5 runs) | 5.32% ±0.12 | 3.49% ±0.08 | 8.17% ±0.13  | 4.40% ±0.08

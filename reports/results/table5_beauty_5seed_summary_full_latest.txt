@@ -1,0 +1,11 @@
+Amazon 2014 Beauty — SASRec++ test metrics (full)
+Generated: 2026-06-05T18:19:18
+Expected seeds: [42, 43, 44, 45, 46]
+Completed seeds: [42, 43, 44, 45, 46] (5/5)
+
+Table 5 style — paper vs ours (mean ± std on test)
+
+method           | seed                | R@5         | NDCG@5      | R@10        | NDCG@10    
+-----------------+---------------------+-------------+-------------+-------------+------------
+SASRec++ (paper) | mean ± std (5 runs) | 6.66% ±0.08 | 4.58% ±0.08 | 9.73% ±0.10 | 5.57% ±0.04
+SASRec++ (ours)  | mean ± std (5 runs) | 5.57% ±0.09 | 3.79% ±0.06 | 8.24% ±0.14 | 4.64% ±0.04

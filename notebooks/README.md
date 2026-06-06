@@ -1,0 +1,64 @@
+# Notebooks
+
+## `replication_report.ipynb`
+
+Publication-style summary: pipeline status, Table 5 (reported vs replicated), learning curves.
+
+---
+
+## Replicating experiments (full pipeline)
+
+See also `jobs/RUN_ORDER.md` and `REPRODUCIBILITY.md`.
+
+### Snellius (recommended)
+
+Replace `/home/scur1266` with your username everywhere (especially `#SBATCH --output` / `--error` in `jobs/*.sbatch`).
+
+```bash
+cd /home/<USER>/rec_sys_cosette_marius
+conda activate recsys
+export SCRATCH=/home/<USER>/scratch
+cp jobs/wandb.env.example jobs/wandb.env   # optional
+```
+
+**Per dataset (Beauty or Sports), submit in order:**
+
+| Step | Beauty | Sports |
+|------|--------|--------|
+| 1 Download | `sbatch jobs/01_download_beauty.sbatch` | `sbatch jobs/01_download_sports.sbatch` |
+| 2 Parquet | `sbatch jobs/02_parquet_beauty.sbatch` | `sbatch jobs/02_parquet_sports.sbatch` |
+| 3 SASRec++ 5-seed | `sbatch jobs/03_sasrec_beauty_5seed_full.sbatch` | `sbatch jobs/03_sasrec_sports_5seed_full.sbatch` |
+| 4 Embeddings | `sbatch jobs/04_embeddings_beauty.sbatch` | `sbatch jobs/04_embeddings_sports.sbatch` |
+| 5 COSETTE | `sbatch jobs/05_cosette_beauty.sbatch` | `sbatch jobs/05_cosette_sports.sbatch` |
+| 6 Collision removal | `sbatch jobs/06_remove_collisions_beauty.sbatch` | `sbatch jobs/06_remove_collisions_sports.sbatch` |
+| 7 MARIUS 5-seed | `sbatch jobs/07_marius_beauty_5seed_full.sbatch` | `sbatch jobs/07_marius_sports_5seed_full.sbatch` |
+
+Steps 1–3 reproduce the **SASRec++** baseline; 4–7 add **COSETTE → MARIUS**. Jobs 03 and 07 skip seeds already recorded as `"status": "ok"`.
+
+After job 05, note the `COSETTE_128d_256x4_*` run id and set it in job 06 (and the `-col` id in job 07 / `marius_5seed.py --quant-id`).
+
+### Export results for the notebook
+
+```bash
+source jobs/wandb.env          # only for --source wandb
+conda activate recsys
+export OUTPUT_ROOT=$SCRATCH/cosette_marius/outputs
+python scripts/export_metrics_for_report.py --copy-results --source wandb
+jupyter notebook notebooks/replication_report.ipynb
+```
+
+### Manual / interactive runs
+
+The notebook contains a **commented reference cell** (section 0) with the same shell commands as the job files. Uncomment one step at a time on a **GPU compute node** if not using Slurm.
+
+---
+
+## WandB
+
+| Task | Need `jobs/wandb.env`? |
+|------|-------------------------|
+| Open notebook (bundled `reports/`) | No |
+| Training (sbatch jobs) | Optional (logging) |
+| `export_metrics_for_report.py --source wandb` | Yes |
+
+Copy `jobs/wandb.env.example` → `jobs/wandb.env`; set `WANDB_API_KEY` (https://wandb.ai/authorize) and `WANDB_ENTITY`.

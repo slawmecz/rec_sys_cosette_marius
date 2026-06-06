@@ -4,7 +4,7 @@ data/
 amazon-2014/
 amazon-2023/
 outputs/
-results/
+/results/
 models/
 wandb/
 *.ckpt
