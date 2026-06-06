@@ -340,7 +340,7 @@ def write_summary_table(
     if completed:
         n = len(completed)
         agg = {
-            "method": "MARIUS (COSETTE) ours",
+            "method": "MARIUS + COSETTE (replication)",
             "seed": f"mean ± std ({n} runs)",
         }
         for label, _ in metrics:
@@ -355,7 +355,7 @@ def write_summary_table(
         results_dir=results_dir,
         mode=mode,
         stem=f"table5_{slug}_marius_5seed_summary",
-        header=common_header + "Table 5 style — paper vs ours (mean ± std on test)\n\n",
+        header=common_header + "Table 5 — paper vs replication (mean ± std on test)\n\n",
         body=summary_body,
     )
 

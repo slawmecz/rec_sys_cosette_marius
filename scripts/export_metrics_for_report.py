@@ -1,27 +1,15 @@
 #!/usr/bin/env python3
 """
-Export replication metrics to offline CSV/JSONL for notebooks and publication.
+Copy Table 5 scores and validation curves into reports/ for the notebook.
 
-Typical workflow after experiments finish:
-
-  # 1. Configure WandB (copy jobs/wandb.env.example → jobs/wandb.env; see notebooks/README.md)
   source jobs/wandb.env
-
-  # 2. Use recsys conda env (system python may lack wandb)
   conda activate recsys
-
-  # 3. Copy final Table 5 scores into the repo (small, commit-friendly)
   python scripts/export_metrics_for_report.py --copy-results
-
-  # 4. Export learning curves from YOUR WandB project (read-only; optional if CSVs exist)
   python scripts/export_metrics_for_report.py --source wandb
 
-  # Fallback without WandB API (sparse validation points only)
-  python scripts/export_metrics_for_report.py --source checkpoints
+Without WandB API: --source checkpoints (sparse validation points).
 
-Outputs:
-  reports/results/   — jsonl score files copied from OUTPUT_ROOT
-  reports/metrics/   — long-format CSVs for plotting
+Writes reports/results/ (jsonl) and reports/metrics/ (CSV).
 """
 
 from __future__ import annotations

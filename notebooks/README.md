@@ -2,7 +2,7 @@
 
 ## `replication_report.ipynb`
 
-Publication-style summary: pipeline status, Table 5 (reported vs replicated), learning curves.
+Table 5 metrics, pipeline status, and learning curves for Beauty and Sports.
 
 ---
 
@@ -33,9 +33,9 @@ cp jobs/wandb.env.example jobs/wandb.env   # optional
 | 6 Collision removal | `sbatch jobs/06_remove_collisions_beauty.sbatch` | `sbatch jobs/06_remove_collisions_sports.sbatch` |
 | 7 MARIUS 5-seed | `sbatch jobs/07_marius_beauty_5seed_full.sbatch` | `sbatch jobs/07_marius_sports_5seed_full.sbatch` |
 
-Steps 1–3 reproduce the **SASRec++** baseline; 4–7 add **COSETTE → MARIUS**. Jobs 03 and 07 skip seeds already recorded as `"status": "ok"`.
+Steps 1–3: SASRec++ baseline. Steps 4–7: COSETTE → MARIUS. Jobs 03 and 07 skip seeds already recorded as `"status": "ok"`.
 
-After job 05, note the `COSETTE_128d_256x4_*` run id and set it in job 06 (and the `-col` id in job 07 / `marius_5seed.py --quant-id`).
+After job 05, note the `COSETTE_128d_256x4_*` run id for job 06 and the `-col` id for job 07.
 
 ### Export results for the notebook
 
@@ -49,7 +49,7 @@ jupyter notebook notebooks/replication_report.ipynb
 
 ### Manual / interactive runs
 
-The notebook contains a **commented reference cell** (section 0) with the same shell commands as the job files. Uncomment one step at a time on a **GPU compute node** if not using Slurm.
+Section 0 of the notebook lists the same shell commands as the job files (markdown). Copy into a code cell and run one step at a time on a GPU node if not using Slurm.
 
 ---
 
@@ -57,7 +57,7 @@ The notebook contains a **commented reference cell** (section 0) with the same s
 
 | Task | Need `jobs/wandb.env`? |
 |------|-------------------------|
-| Open notebook (bundled `reports/`) | No |
+| Open notebook (`reports/` in repo) | No |
 | Training (sbatch jobs) | Optional (logging) |
 | `export_metrics_for_report.py --source wandb` | Yes |
 
