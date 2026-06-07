@@ -1,0 +1,12 @@
+{
+  "Beauty": {
+    "sasrec_5seed_hours": 3.546111111111111,
+    "marius_5seed_hours": 5.318333333333333,
+    "note": "Approx. span from first to last seed timestamp in scores jsonl."
+  },
+  "Sports_and_Outdoors": {
+    "sasrec_5seed_hours": 3.5644444444444443,
+    "marius_5seed_hours": 5.3197222222222225,
+    "note": "Approx. span from first to last seed timestamp in scores jsonl."
+  }
+}

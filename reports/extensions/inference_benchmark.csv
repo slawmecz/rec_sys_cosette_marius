@@ -1,0 +1,9 @@
+category,method,seed,split,seconds,peak_mem_gb,n_params,run_directory
+Beauty,marius,42,valid,7.180,13.289,3764992,MARIUS_small_Beauty_seed42_2026-06-06_13-16-53
+Beauty,marius,42,test,7.044,13.291,3764992,MARIUS_small_Beauty_seed42_2026-06-06_13-16-53
+Beauty,sasrec,42,valid,3.331,4.248,1952384,SASRec_Beauty_seed42_2026-06-05_13-45-56
+Beauty,sasrec,42,test,2.633,4.248,1952384,SASRec_Beauty_seed42_2026-06-05_13-45-56
+Sports_and_Outdoors,marius,42,valid,11.171,13.289,3764992,MARIUS_small_Sports_and_Outdoors_seed42_2026-06-06_13-16-54
+Sports_and_Outdoors,marius,42,test,11.094,13.290,3764992,MARIUS_small_Sports_and_Outdoors_seed42_2026-06-06_13-16-54
+Sports_and_Outdoors,sasrec,42,valid,4.804,4.252,2753152,SASRec_Sports_and_Outdoors_seed42_2026-06-05_20-17-25
+Sports_and_Outdoors,sasrec,42,test,4.087,4.252,2753152,SASRec_Sports_and_Outdoors_seed42_2026-06-05_20-17-25

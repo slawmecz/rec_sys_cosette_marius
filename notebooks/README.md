@@ -4,6 +4,10 @@
 
 Table 5 metrics, pipeline status, and learning curves for Beauty and Sports.
 
+## `extended_report.ipynb`
+
+Extra tables/plots: inference time & GPU memory, training wall-clock, val–test gap, vocab sizes, COSETTE collisions, per-seed spread. GPU benchmarks skipped by default — run `sbatch jobs/08_extensions_beauty.sbatch` and `08_extensions_sports.sbatch` first.
+
 ---
 
 ## Replicating experiments (full pipeline)

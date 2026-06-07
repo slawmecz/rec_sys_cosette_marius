@@ -92,3 +92,17 @@ Results: `marius_sports_5seed_full_scores.jsonl`, `table5_sports_marius_5seed_*_
 Output: `${DATA_ROOT}/data/embeddings/sentence-t5-xl/Sports_and_Outdoors/embeddings.parquet`
 
 First run downloads `sentence-transformers/sentence-t5-xl` from HuggingFace (~3 GB).
+
+---
+
+## Extensions (optional, after replication)
+
+Inference time + GPU memory on **existing checkpoints** (seed 42, ~30 min each):
+
+| Dataset | Command |
+|---------|---------|
+| Beauty | `sbatch jobs/08_extensions_beauty.sbatch` |
+| Sports | `sbatch jobs/08_extensions_sports.sbatch` |
+
+Outputs: `reports/extensions/inference_benchmark.csv`, `wall_clock.json`, `model_vocab.json`  
+Notebook: `notebooks/extended_report.ipynb`

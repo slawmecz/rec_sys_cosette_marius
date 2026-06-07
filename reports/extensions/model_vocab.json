@@ -1,0 +1,12 @@
+{
+  "Beauty": {
+    "sasrec_vocab": 12103,
+    "marius_code_vocab": 1026,
+    "cosette_quant_id": "COSETTE_128d_256x4_f958-col"
+  },
+  "Sports_and_Outdoors": {
+    "sasrec_vocab": 18359,
+    "marius_code_vocab": 1026,
+    "cosette_quant_id": "COSETTE_128d_256x4_8ed1-col"
+  }
+}
