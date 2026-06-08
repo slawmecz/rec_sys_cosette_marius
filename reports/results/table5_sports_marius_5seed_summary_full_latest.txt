@@ -7,5 +7,5 @@ Table 5 style — paper vs ours (mean ± std on test)
 
 method                 | seed                | R@5         | NDCG@5      | R@10        | NDCG@10    
 -----------------------+---------------------+-------------+-------------+-------------+------------
-MARIUS (COSETTE) paper | mean ± std (5 runs) | 4.29% ±0.08 | 2.91% ±0.06 | 6.31% ±0.10 | 3.55% ±0.05
+MARIUS (COSETTE) paper | mean ± std (5 runs) | 4.31% ±0.08 | 2.83% ±0.06 | 6.72% ±0.08 | 3.62% ±0.06
 MARIUS (COSETTE) ours  | mean ± std (5 runs) | 3.09% ±0.03 | 2.02% ±0.02 | 4.87% ±0.03 | 2.59% ±0.02
