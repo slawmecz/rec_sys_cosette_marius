@@ -1,5 +1,16 @@
 # COSETTE & MARIUS: Reproducibility Study
 
+> ⚠️ **STATUS — superseded.** This document is the **master TA's original
+> single-seed study** (Beauty / Video Games / Arts & Crafts), preserved here for
+> attribution and history. The team's authoritative reproduction — a **5-seed**
+> study on **Beauty + Sports** with **SASRec++ and MARIUS-COSETTE**, the
+> root-cause analysis of the gap, and the **paper-faithful SASRec++ re-run** — is
+> in [`REPLICATION_REPORT.md`](REPLICATION_REPORT.md). Where the two disagree,
+> trust `REPLICATION_REPORT.md` and the committed `reports/` artifacts.
+> In particular: the "running 5 seeds would close the gap" expectation below was
+> **not** borne out (the 5-seed mean has tiny std and stays below the paper), and
+> the residual gap is **not** explained by COSETTE quality — see the report.
+
 Paper: [Closing the Performance Gap in Generative Recommenders](https://arxiv.org/abs/2508.14910)
 
 ---
