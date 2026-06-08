@@ -1,7 +1,7 @@
 # @package paths
 
 protocol: file
-# Base folder — resolves to <project_root>/datasets/ wherever the script is run from
+# Base folder - resolves to <project_root>/datasets/ wherever the script is run from
 root: ${oc.env:PWD}/datasets
 # Folder where Amazon-Reviews-2023 was downloaded via HuggingFace
 hf_data_folder: ${.root}/amazon-2023

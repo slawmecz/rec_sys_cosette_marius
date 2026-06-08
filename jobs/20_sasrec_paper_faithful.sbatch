@@ -16,14 +16,14 @@
 # Figure 11a), which differs from the repo's released DEFAULT (d=128, L2 norm).
 #   * Beauty (smallest, 12k items): paper selects d=32, L=2, NO normalization.
 #   * The released default d=128 + L2 sits in the DARK (worst, ~8 R@10) region
-#     of the paper's own Figure 11a for Beauty — i.e. it is NOT the config that
+#     of the paper's own Figure 11a for Beauty - i.e. it is NOT the config that
 #     produced the paper's reported 9.73.
 #
-# This job keeps DATA_ROOT (reuses the existing parquet timelines — SASRec needs
+# This job keeps DATA_ROOT (reuses the existing parquet timelines - SASRec needs
 # NO embeddings / COSETTE) and writes to a FRESH OUTPUT_ROOT so the original
 # d=128 runs are NOT re-recorded by the resume logic.
 #
-# SUBMIT (smoke-test first, then full — see FAITHFUL_RERUN.md):
+# SUBMIT (smoke-test first, then full - see FAITHFUL_RERUN.md):
 #   # Beauty, paper config (PRIMARY):
 #   sbatch --export=ALL,CATEGORY=Beauty,CATEGORY_SLUG=beauty,VOCAB=12103,SAS_D=32,SAS_DH=16 jobs/20_sasrec_paper_faithful.sbatch
 #   # Beauty, d=64 hedge (in case the Fig-11a star is one tick off):

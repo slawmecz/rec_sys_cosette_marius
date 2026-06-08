@@ -29,3 +29,12 @@ jobs/wandb.env
 
 # training artifacts written into repo dir by test.py
 lightning_logs/
+
+# AI assistant artifacts and local working notes (local only, never pushed)
+CLAUDE.md
+CLAUDE.local.md
+*.local.md
+AGENTS.md
+GEMINI.md
+.claude/
+.context/

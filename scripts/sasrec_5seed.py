@@ -283,7 +283,7 @@ def write_summary_table(
     metric_cols = [label for label, _ in metrics]
     display_name = category.replace("_", " ")
     common_header = (
-        f"Amazon 2014 {display_name} — SASRec++ test metrics ({mode})\n"
+        f"Amazon 2014 {display_name} - SASRec++ test metrics ({mode})\n"
         f"Generated: {datetime.now().isoformat(timespec='seconds')}\n"
         f"Expected seeds: {expected_seeds}\n"
         f"Completed seeds: {sorted(completed)} ({len(completed)}/{len(expected_seeds)})\n\n"
@@ -347,7 +347,7 @@ def write_summary_table(
         results_dir=results_dir,
         mode=mode,
         stem=f"table5_{slug}_5seed_summary",
-        header=common_header + "Table 5 — paper vs replication (mean ± std on test)\n\n",
+        header=common_header + "Table 5 - paper vs replication (mean ± std on test)\n\n",
         body=summary_body,
     )
 

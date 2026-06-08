@@ -10,7 +10,7 @@
 #SBATCH --error=/scratch-shared/%u/cosette_marius/outputs/logs/%x_%j.err
 
 # MARIUS (COSETTE) on Beauty: 5 seeds, train + test + tables.
-# Requires job 06 (COSETTE_128d_256x4_f958-col). ~6–10 h for 5 seeds.
+# Requires job 06 (COSETTE_128d_256x4_f958-col). ~6-10 h for 5 seeds.
 # sbatch jobs/07_marius_beauty_5seed_full.sbatch
 
 set -uo pipefail

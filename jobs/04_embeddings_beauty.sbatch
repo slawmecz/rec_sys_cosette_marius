@@ -9,7 +9,7 @@
 #SBATCH --output=/scratch-shared/%u/cosette_marius/outputs/logs/%x_%j.out
 #SBATCH --error=/scratch-shared/%u/cosette_marius/outputs/logs/%x_%j.err
 
-# Sentence-T5-XL embeddings for Beauty (one-time; reused by COSETTE → MARIUS).
+# Sentence-T5-XL embeddings for Beauty (one-time; reused by COSETTE -> MARIUS).
 # Requires job 02 (parquet) done. Skips if output parquet already exists.
 # sbatch jobs/04_embeddings_beauty.sbatch
 

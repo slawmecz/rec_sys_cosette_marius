@@ -1,4 +1,4 @@
-Amazon 2014 Sports and Outdoors — SASRec++ test metrics (full)
+Amazon 2014 Sports and Outdoors - SASRec++ test metrics (full)
 Generated: 2026-06-08T17:56:54
 Expected seeds: [42, 43, 44, 45, 46]
 Completed seeds: [42, 43, 44, 45, 46] (5/5)

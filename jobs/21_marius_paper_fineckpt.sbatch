@@ -10,10 +10,10 @@
 #SBATCH --error=/scratch-shared/%u/cosette_marius/outputs_paper/logs/%x_%j.err
 
 # =============================================================================
-# OPTIONAL / SECONDARY — MARIUS (COSETTE) re-run  (see FAITHFUL_RERUN.md)
+# OPTIONAL / SECONDARY - MARIUS (COSETTE) re-run  (see FAITHFUL_RERUN.md)
 # -----------------------------------------------------------------------------
 # MARIUS's config is ALREADY paper-faithful (d=256, 2 temporal + 2 depth layers,
-# dropout 0.4/0.1, 80k steps, batch 256 — Table 9 / Fig 9a / App C.2). So this is
+# dropout 0.4/0.1, 80k steps, batch 256 - Table 9 / Fig 9a / App C.2). So this is
 # NOT a config-fix experiment. It does two things:
 #   1. Confirms the faithful MARIUS run reproduces (~8.17 Beauty R@10) in a fresh
 #      environment (rules out env confounds).

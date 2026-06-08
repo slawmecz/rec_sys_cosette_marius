@@ -1,9 +1,9 @@
-Amazon 2014 Beauty — SASRec++ test metrics (full)
+Amazon 2014 Beauty - SASRec++ test metrics (full)
 Generated: 2026-06-08T17:57:05
 Expected seeds: [42, 43, 44, 45, 46]
 Completed seeds: [42, 43, 44, 45, 46] (5/5)
 
-Table 5 — paper vs replication (mean ± std on test)
+Table 5 - paper vs replication (mean ± std on test)
 
 method                 | seed                | R@5         | NDCG@5      | R@10        | NDCG@10    
 -----------------------+---------------------+-------------+-------------+-------------+------------

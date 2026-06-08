@@ -10,7 +10,7 @@
 #SBATCH --error=/scratch-shared/%u/cosette_marius/outputs/logs/%x_%j.err
 
 # Train COSETTE on Sports_and_Outdoors (paper small-dataset settings: bs=256, 1000 epochs).
-# Requires job 04 (embeddings). Output quant id e.g. COSETTE_128d_256x4-xxxx — save for job 06.
+# Requires job 04 (embeddings). Output quant id e.g. COSETTE_128d_256x4-xxxx - save for job 06.
 # sbatch jobs/05_cosette_sports.sbatch
 
 set -euo pipefail
