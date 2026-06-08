@@ -1,0 +1,14 @@
+Amazon 2014 Sports and Outdoors — SASRec++ test metrics (full)
+Generated: 2026-06-08T18:00:09
+Expected seeds: [42, 43, 44, 45, 46]
+Completed seeds: [42, 43, 44, 45, 46] (5/5)
+
+Per-seed results (R@5, NDCG@5, R@10, NDCG@10 on test)
+
+seed | run                                                   | R@5   | NDCG@5 | R@10  | NDCG@10
+-----+-------------------------------------------------------+-------+--------+-------+--------
+42   | SASRec_Sports_and_Outdoors_seed42_2026-06-08_15-09-48 | 3.43% | 2.33%  | 5.10% | 2.87%  
+43   | SASRec_Sports_and_Outdoors_seed43_2026-06-08_15-43-41 | 3.49% | 2.36%  | 5.17% | 2.89%  
+44   | SASRec_Sports_and_Outdoors_seed44_2026-06-08_16-17-48 | 3.39% | 2.30%  | 4.90% | 2.79%  
+45   | SASRec_Sports_and_Outdoors_seed45_2026-06-08_16-52-04 | 3.47% | 2.38%  | 5.12% | 2.91%  
+46   | SASRec_Sports_and_Outdoors_seed46_2026-06-08_17-26-17 | 3.43% | 2.35%  | 5.12% | 2.89%  
