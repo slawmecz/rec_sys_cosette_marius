@@ -27,10 +27,12 @@ if [[ -f "${PROJECT_ROOT}/jobs/wandb.env" ]]; then
   source "${PROJECT_ROOT}/jobs/wandb.env"
 fi
 
-export LOG_DIR="${LOG_DIR:-/home/scur1266/scratch/cosette_marius/outputs/logs}"
+export LOG_DIR="${LOG_DIR:-${SCRATCH:-/home/scur1266/scratch}/cosette_marius/outputs/logs}"
 mkdir -p "${DATA_ROOT}" "${OUTPUT_ROOT}/models" "${OUTPUT_ROOT}/wandb" "${LOG_DIR}"
 
 export PYTHONPATH="${PROJECT_ROOT}"
+# Isolate the conda env from any ~/.local user-site packages (prevents version shadowing).
+export PYTHONNOUSERSITE=1
 export RAY_TRAIN_V2_ENABLED=1
 
 # Weights & Biases

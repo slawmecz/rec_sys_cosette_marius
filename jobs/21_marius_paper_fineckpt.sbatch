@@ -6,8 +6,8 @@
 #SBATCH --cpus-per-task=18
 #SBATCH --mem=64G
 #SBATCH --time=16:00:00
-#SBATCH --output=/home/scur1266/scratch/cosette_marius/outputs_paper/logs/%x_%j.out
-#SBATCH --error=/home/scur1266/scratch/cosette_marius/outputs_paper/logs/%x_%j.err
+#SBATCH --output=/scratch-shared/%u/cosette_marius/outputs_paper/logs/%x_%j.out
+#SBATCH --error=/scratch-shared/%u/cosette_marius/outputs_paper/logs/%x_%j.err
 
 # =============================================================================
 # OPTIONAL / SECONDARY — MARIUS (COSETTE) re-run  (see FAITHFUL_RERUN.md)

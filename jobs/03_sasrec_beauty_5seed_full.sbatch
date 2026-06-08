@@ -6,8 +6,8 @@
 #SBATCH --cpus-per-task=18
 #SBATCH --mem=64G
 #SBATCH --time=12:00:00
-#SBATCH --output=/home/scur1266/scratch/cosette_marius/outputs/logs/%x_%j.out
-#SBATCH --error=/home/scur1266/scratch/cosette_marius/outputs/logs/%x_%j.err
+#SBATCH --output=/scratch-shared/%u/cosette_marius/outputs/logs/%x_%j.out
+#SBATCH --error=/scratch-shared/%u/cosette_marius/outputs/logs/%x_%j.err
 
 # Beauty SASRec++: 5 seeds, train + test + tables (paper-aligned).
 # sbatch jobs/03_sasrec_beauty_5seed_full.sbatch

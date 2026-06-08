@@ -6,8 +6,8 @@
 #SBATCH --cpus-per-task=18
 #SBATCH --mem=64G
 #SBATCH --time=12:00:00
-#SBATCH --output=/home/scur1266/scratch/cosette_marius/outputs/logs/%x_%j.out
-#SBATCH --error=/home/scur1266/scratch/cosette_marius/outputs/logs/%x_%j.err
+#SBATCH --output=/scratch-shared/%u/cosette_marius/outputs/logs/%x_%j.out
+#SBATCH --error=/scratch-shared/%u/cosette_marius/outputs/logs/%x_%j.err
 
 # Train COSETTE on Beauty (paper small-dataset settings: bs=256, 1000 epochs).
 # Requires job 04 (embeddings). Output quant id e.g. COSETTE_128d_256x4-xxxx — save for job 06.

@@ -26,3 +26,6 @@ jobs/wandb.env
 
 # cursor (if ever created inside repo)
 .cursor/
+
+# training artifacts written into repo dir by test.py
+lightning_logs/

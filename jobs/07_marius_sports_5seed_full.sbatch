@@ -6,8 +6,8 @@
 #SBATCH --cpus-per-task=18
 #SBATCH --mem=64G
 #SBATCH --time=16:00:00
-#SBATCH --output=/home/scur1266/scratch/cosette_marius/outputs/logs/%x_%j.out
-#SBATCH --error=/home/scur1266/scratch/cosette_marius/outputs/logs/%x_%j.err
+#SBATCH --output=/scratch-shared/%u/cosette_marius/outputs/logs/%x_%j.out
+#SBATCH --error=/scratch-shared/%u/cosette_marius/outputs/logs/%x_%j.err
 
 # MARIUS (COSETTE) on Sports: 5 seeds, train + test + tables.
 # Requires job 06 (COSETTE_128d_256x4_8ed1-col). ~5–9 h for 5 seeds.

@@ -6,8 +6,8 @@
 #SBATCH --cpus-per-task=18
 #SBATCH --mem=32G
 #SBATCH --time=01:00:00
-#SBATCH --output=/home/scur1266/scratch/cosette_marius/outputs/logs/%x_%j.out
-#SBATCH --error=/home/scur1266/scratch/cosette_marius/outputs/logs/%x_%j.err
+#SBATCH --output=/scratch-shared/%u/cosette_marius/outputs/logs/%x_%j.out
+#SBATCH --error=/scratch-shared/%u/cosette_marius/outputs/logs/%x_%j.err
 
 # Deduplicate COSETTE semantic IDs for Beauty (job 05 output).
 # Writes COSETTE_128d_256x4_f958-col.parquet for MARIUS training.
