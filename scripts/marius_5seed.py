@@ -28,10 +28,10 @@ PAPER_MARIUS_COSETTE: dict[str, dict[str, tuple[float, float]]] = {
         "NDCG@10": (5.46, 0.05),
     },
     "Sports_and_Outdoors": {
-        "R@5": (4.29, 0.08),
-        "NDCG@5": (2.91, 0.06),
-        "R@10": (6.31, 0.10),
-        "NDCG@10": (3.55, 0.05),
+        "R@5": (4.31, 0.08),
+        "NDCG@5": (2.83, 0.06),
+        "R@10": (6.72, 0.08),
+        "NDCG@10": (3.62, 0.06),
     },
 }
 
@@ -385,18 +385,28 @@ def write_summary_table(
     )
 
 
+def _extra_overrides() -> list[str]:
+    """Optional Hydra overrides for paper-faithful re-runs (e.g. finer checkpointing).
+
+    Set via EXTRA_TRAIN_OVERRIDES (space-separated Hydra overrides).
+    Empty by default, so existing jobs are unaffected.
+    """
+    return os.environ.get("EXTRA_TRAIN_OVERRIDES", "").split()
+
+
 def paper_train_args() -> list[str]:
     batch = os.environ.get("TRAIN_BATCH_PER_GPU", "256")
     workers = os.environ.get("RAY_NUM_WORKERS", "1")
     max_steps = os.environ.get("TRAIN_MAX_STEPS", "80000")
+    val_check = os.environ.get("TRAIN_VAL_CHECK_INTERVAL", "10000")
     return [
         f"trainer.max_steps={max_steps}",
-        "trainer.val_check_interval=10000",
+        f"trainer.val_check_interval={val_check}",
         f"data.datamodule.train_batch_size={batch}",
         f"data.datamodule.valid_batch_size={batch}",
         f"ray.scaling_config.num_workers={workers}",
         "ray.scaling_config.resources_per_worker={CPU:4,GPU:1}",
-    ]
+    ] + _extra_overrides()
 
 
 def smoke_train_args() -> list[str]:
@@ -411,7 +421,7 @@ def smoke_train_args() -> list[str]:
         f"data.datamodule.valid_batch_size={batch}",
         "ray.scaling_config.num_workers=1",
         "ray.scaling_config.resources_per_worker={CPU:4,GPU:1}",
-    ]
+    ] + _extra_overrides()
 
 
 def process_seed(

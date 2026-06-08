@@ -377,18 +377,30 @@ def write_summary_table(
     )
 
 
+def _extra_overrides() -> list[str]:
+    """Optional Hydra overrides for paper-faithful re-runs (model size, loss, etc.).
+
+    Set via EXTRA_TRAIN_OVERRIDES, e.g.
+      EXTRA_TRAIN_OVERRIDES="model.net.d_model=32 model.net.d_head=16 \
+        model.net.normalization=null model.net.criterion.temperature=1.0"
+    Empty by default, so existing jobs are unaffected.
+    """
+    return os.environ.get("EXTRA_TRAIN_OVERRIDES", "").split()
+
+
 def paper_train_args() -> list[str]:
     batch = os.environ.get("TRAIN_BATCH_PER_GPU", "256")
     workers = os.environ.get("RAY_NUM_WORKERS", "1")
     max_steps = os.environ.get("TRAIN_MAX_STEPS", "80000")
+    val_check = os.environ.get("TRAIN_VAL_CHECK_INTERVAL", "10000")
     return [
         f"trainer.max_steps={max_steps}",
-        "trainer.val_check_interval=10000",
+        f"trainer.val_check_interval={val_check}",
         f"data.datamodule.train_batch_size={batch}",
         f"data.datamodule.valid_batch_size={batch}",
         f"ray.scaling_config.num_workers={workers}",
         "ray.scaling_config.resources_per_worker={CPU:4,GPU:1}",
-    ]
+    ] + _extra_overrides()
 
 
 def smoke_train_args() -> list[str]:
@@ -403,7 +415,7 @@ def smoke_train_args() -> list[str]:
         f"data.datamodule.valid_batch_size={batch}",
         "ray.scaling_config.num_workers=1",
         "ray.scaling_config.resources_per_worker={CPU:4,GPU:1}",
-    ]
+    ] + _extra_overrides()
 
 
 def process_seed(
