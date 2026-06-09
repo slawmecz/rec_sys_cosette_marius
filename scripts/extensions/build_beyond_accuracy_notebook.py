@@ -1,0 +1,189 @@
+#!/usr/bin/env python3
+"""Generate notebooks/beyond_accuracy.ipynb (valid nbformat-v4 JSON).
+
+Run: python scripts/extensions/build_beyond_accuracy_notebook.py
+The notebook has two parts: (A) a synthetic sanity demo that runs anywhere with
+no data, and (B) the real-data analysis that activates once the Snellius Top-K
+dumps (jobs/22) are present under reports/extensions/topk/<category>/.
+"""
+
+from pathlib import Path
+
+import nbformat as nbf
+
+nb = nbf.v4.new_notebook()
+cells = []
+md = lambda s: cells.append(nbf.v4.new_markdown_cell(s))
+code = lambda s: cells.append(nbf.v4.new_code_cell(s))
+
+md(
+    "# Beyond-accuracy analysis: COSETTE/MARIUS vs SASRec++\n"
+    "\n"
+    "Item-side distribution metrics (catalog coverage, Gini, normalized Shannon entropy, "
+    "average recommendation popularity, APLT, novelty, intra-list diversity, MARIUS "
+    "hallucination rate, popularity-decile exposure, and tail recall) that the base paper "
+    "(arXiv:2508.14910) only shows informally (Fig 4 decile plot, Fig 8 collisions) but never "
+    "tabulates.\n"
+    "\n"
+    "Metrics are defined in `scripts/extensions/beyond_accuracy.py`. They run on the ranked "
+    "Top-K lists that `sasrec.search` / `marius.search` already produce, so nothing in the "
+    "authors' model or eval code changes.\n"
+    "\n"
+    "**Data note.** Real numbers need the Top-K dumps produced on Snellius by "
+    "`jobs/22_dump_topk_{beauty,sports}.sbatch` (a single read-only eval pass per model/seed). "
+    "Part A below runs with no data so you can verify the metric implementations locally; "
+    "Part B activates automatically once the dumps are under "
+    "`reports/extensions/topk/<category>/`."
+)
+
+code(
+    "import sys, json\n"
+    "from pathlib import Path\n"
+    "import numpy as np\n"
+    "import pandas as pd\n"
+    "\n"
+    "REPO = Path.cwd()\n"
+    "while not (REPO / 'scripts' / 'extensions' / 'beyond_accuracy.py').exists() and REPO != REPO.parent:\n"
+    "    REPO = REPO.parent\n"
+    "sys.path.insert(0, str(REPO))\n"
+    "from scripts.extensions import beyond_accuracy as ba\n"
+    "\n"
+    "DUMP_ROOT = REPO / 'reports' / 'extensions' / 'topk'\n"
+    "SEEDS = [42, 43, 44, 45, 46]\n"
+    "CATEGORIES = {'Beauty': 'beauty', 'Sports_and_Outdoors': 'sports'}\n"
+    "print('repo:', REPO)"
+)
+
+md(
+    "## Part A. Synthetic sanity demo (no data required)\n"
+    "Three toy recommenders over a Zipfian catalog: a popularity-chaser, a uniform one, and a "
+    "generative one with injected hallucinations. The metrics should order them as expected "
+    "(chaser = high Gini, low coverage, low novelty, low APLT)."
+)
+
+code(
+    "rng = np.random.default_rng(0)\n"
+    "n_catalog, n_users, k = 1000, 2000, 10\n"
+    "item_pop = ((1.0 / np.arange(1, n_catalog + 1)) * 1e5).astype(np.int64) + 1\n"
+    "p = item_pop / item_pop.sum()\n"
+    "item_emb = rng.normal(size=(n_catalog, 32))\n"
+    "head50 = np.argsort(-item_pop)[:50]\n"
+    "\n"
+    "recs = {\n"
+    "    'popularity-chaser': [list(rng.choice(head50, k, replace=False)) for _ in range(n_users)],\n"
+    "    'uniform':           [list(rng.choice(n_catalog, k, replace=False)) for _ in range(n_users)],\n"
+    "    'generative':        [[(-1 if rng.random() < 0.08 else int(x))\n"
+    "                            for x in rng.choice(n_catalog, k, replace=False, p=p)] for _ in range(n_users)],\n"
+    "}\n"
+    "demo = {name: ba.compute_all(r, item_pop, n_catalog, item_emb=item_emb, k=k) for name, r in recs.items()}\n"
+    "pd.DataFrame(demo).T[['coverage','gini','entropy_norm','arp','aplt','novelty','ild','hallucination_rate']].round(4)"
+)
+
+md(
+    "## Part B. Real data (activates after the Snellius dump)\n"
+    "Loads the dumped Top-K and support tables, converts to catalog item indices "
+    "(SASRec: vocab id minus special-token offset; MARIUS: semantic-ID tuple lookup, with "
+    "unmatched tuples marked as hallucinations), and computes the suite per model and seed."
+)
+
+code(
+    "def load_support(category):\n"
+    "    d = DUMP_ROOT / category\n"
+    "    meta = json.loads((d / 'meta.json').read_text())\n"
+    "    pop = np.load(d / 'popularity.npy')\n"
+    "    emb = np.load(d / 'embeddings.npy')\n"
+    "    t2i = json.loads((d / 'tuple_to_item.json').read_text())\n"
+    "    return meta, pop, emb, t2i\n"
+    "\n"
+    "def load_model_recs(category, model, seed, meta, t2i):\n"
+    "    npz = np.load(DUMP_ROOT / category / f'{model}_seed{seed}_topk.npz')\n"
+    "    ns = meta['n_special']\n"
+    "    if model == 'sasrec':\n"
+    "        recs = [[int(v) - ns if int(v) >= ns else ba.HALLUCINATION for v in row] for row in npz['topk_items']]\n"
+    "        targets = [int(t) - ns if int(t) >= ns else ba.HALLUCINATION for t in npz['target_item']]\n"
+    "    else:\n"
+    "        recs = [[t2i.get(','.join(str(int(c)) for c in code), ba.HALLUCINATION) for code in row]\n"
+    "                for row in npz['topk_codes']]\n"
+    "        targets = [t2i.get(','.join(str(int(c)) for c in code), ba.HALLUCINATION) for code in npz['target_codes']]\n"
+    "    return recs, targets, npz['hist_len']\n"
+    "\n"
+    "available = {c: (DUMP_ROOT / c / 'meta.json').exists() for c in CATEGORIES}\n"
+    "print('dumps present:', available)\n"
+    "if not any(available.values()):\n"
+    "    print('\\nNo dumps yet. On Snellius run, per seed:')\n"
+    "    print('  sbatch --export=ALL,SEED=42 jobs/22_dump_topk_beauty.sbatch')\n"
+    "    print('  sbatch --export=ALL,SEED=42 jobs/22_dump_topk_sports.sbatch')\n"
+    "    print('then copy reports/extensions/topk/ back here.')"
+)
+
+code(
+    "def beyond_accuracy_table(category, ks=(10, 20)):\n"
+    "    meta, pop, emb, t2i = load_support(category)\n"
+    "    rows = []\n"
+    "    for model in ('sasrec', 'marius'):\n"
+    "        for seed in SEEDS:\n"
+    "            if not (DUMP_ROOT / category / f'{model}_seed{seed}_topk.npz').exists():\n"
+    "                continue\n"
+    "            recs, targets, _ = load_model_recs(category, model, seed, meta, t2i)\n"
+    "            for k in ks:\n"
+    "                m = ba.compute_all(recs, pop, meta['n_catalog'], item_emb=emb, targets=targets, k=k)\n"
+    "                m.update({'category': category, 'model': model, 'seed': seed})\n"
+    "                rows.append(m)\n"
+    "    df = pd.DataFrame(rows)\n"
+    "    if df.empty:\n"
+    "        return df\n"
+    "    metric_cols = [c for c in df.columns if c not in ('category','model','seed','k')]\n"
+    "    return df.groupby(['category','model','k'])[metric_cols].mean().round(4)\n"
+    "\n"
+    "for c, present in available.items():\n"
+    "    if present:\n"
+    "        display(beyond_accuracy_table(c))"
+)
+
+code(
+    "# Popularity-decile exposure profile (absolute version of the paper's Fig 4).\n"
+    "def decile_table(category, k=10):\n"
+    "    meta, pop, emb, t2i = load_support(category)\n"
+    "    out = {}\n"
+    "    for model in ('sasrec', 'marius'):\n"
+    "        seeds = [s for s in SEEDS if (DUMP_ROOT / category / f'{model}_seed{s}_topk.npz').exists()]\n"
+    "        if not seeds:\n"
+    "            continue\n"
+    "        profiles = []\n"
+    "        for s in seeds:\n"
+    "            recs, _, _ = load_model_recs(category, model, s, meta, t2i)\n"
+    "            profiles.append(ba.popularity_decile_exposure(recs, pop, k=k))\n"
+    "        out[model] = np.mean(profiles, axis=0)\n"
+    "    if not out:\n"
+    "        return pd.DataFrame()\n"
+    "    return pd.DataFrame(out, index=[f'D{i+1}' for i in range(len(next(iter(out.values()))))]).round(4)\n"
+    "\n"
+    "for c, present in available.items():\n"
+    "    if present:\n"
+    "        print(c, '- exposure share per popularity decile (D1=rarest, D10=most popular)')\n"
+    "        display(decile_table(c))"
+)
+
+md(
+    "## What to read off Part B\n"
+    "- **Coverage / Gini / entropy / novelty / APLT / ILD:** does the generative model "
+    "(MARIUS) spread exposure wider and surface more tail items than discriminative SASRec++, "
+    "or the reverse? The paper hints (Fig 4) that MARIUS shifts toward mid-popular items; this "
+    "quantifies it.\n"
+    "- **Tail recall:** does any diversity gain come with correct tail predictions, or just "
+    "noise? (accuracy-meets-beyond-accuracy)\n"
+    "- **Hallucination rate:** MARIUS only; the share of generated tuples mapping to no item.\n"
+    "- **Decile profile:** the absolute exposure distribution; compare against the paper's "
+    "Fig 4 difference plot.\n"
+    "\n"
+    "Open scientific hook (needs a content-only RQ-VAE tokenizer variant): is COSETTE's "
+    "*collaborative* tokenization itself a diversity/popularity-bias lever, vs content-only "
+    "semantic IDs? Differentiate from Ghost (arXiv:2605.16825) and CRAB (arXiv:2604.05113), "
+    "which target TIGER/LLM generative recommenders, not MARIUS."
+)
+
+nb["cells"] = cells
+out = Path(__file__).resolve().parents[2] / "notebooks" / "beyond_accuracy.ipynb"
+out.parent.mkdir(parents=True, exist_ok=True)
+nbf.write(nb, str(out))
+print("wrote", out)
