@@ -183,8 +183,12 @@ def main() -> int:
     parser.add_argument("--category", required=True)
     parser.add_argument("--category-slug", required=True)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--method", choices=["sasrec", "marius", "both"], default="both",
+                        help="dump one method (use when sasrec/marius live under different output roots)")
+    parser.add_argument("--no-support", action="store_true",
+                        help="skip writing the shared support tables (popularity/embeddings/tuple lookup)")
     parser.add_argument("--emb-method", default="sentence-t5-xl")
-    parser.add_argument("--quant-method", required=True, help="the -col COSETTE id, e.g. COSETTE_128d_256x4_f958-col")
+    parser.add_argument("--quant-method", default=None, help="the -col COSETTE id, e.g. COSETTE_128d_256x4_<id>-col; required unless --no-support")
     parser.add_argument("--output-root", type=Path, default=None)
     parser.add_argument("--results-dir", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, default=None)
@@ -199,15 +203,22 @@ def main() -> int:
     out_dir = args.out_dir or (repo_root / "reports" / "extensions" / "topk" / args.category)
     limit = 2 if args.smoke else None
 
+    methods = [("sasrec", "dense"), ("marius", "generative")]
+    if args.method != "both":
+        methods = [m for m in methods if m[0] == args.method]
+    write_support = not args.no_support
+    if write_support and not args.quant_method:
+        parser.error("--quant-method is required unless --no-support is set")
+
     ray.init(ignore_reinit_error=True)
     fsspec.filesystem("file")
 
     support_done = False
-    for method, mode in (("sasrec", "dense"), ("marius", "generative")):
+    for method, mode in methods:
         run_directory = run_directory_for_seed(results_dir, method=method, slug=args.category_slug, seed=args.seed)
         cfg, ckpt_path = get_best_checkpoint(output_root / "models", run_directory)
 
-        if not support_done:
+        if write_support and not support_done:
             write_support_tables(
                 cfg, category=args.category, emb_method=args.emb_method,
                 quant_method=args.quant_method, out_dir=out_dir,

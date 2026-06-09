@@ -18,10 +18,12 @@ source "${SLURM_SUBMIT_DIR:-$(pwd)}/jobs/env_beauty.sh"
 mkdir -p "${OUTPUT_ROOT}/logs" "${OUTPUT_ROOT}/results"
 cd "${PROJECT_ROOT}"
 
+# QUANT_ID must match the -col parquet job 06 produced (random-uuid suffix; f958 is only
+# slawek's original run). Pass QUANT_ID=COSETTE_128d_256x4_<id>-col for a fresh pipeline.
 "${PYTHON_BIN}" scripts/marius_5seed.py --mode full \
   --category Beauty \
   --category-slug beauty \
-  --quant-id COSETTE_128d_256x4_f958-col
+  --quant-id "${QUANT_ID:-COSETTE_128d_256x4_f958-col}"
 
 echo "Full-run scores:"
 cat "${OUTPUT_ROOT}/results/marius_beauty_5seed_full_scores.jsonl" 2>/dev/null || true
