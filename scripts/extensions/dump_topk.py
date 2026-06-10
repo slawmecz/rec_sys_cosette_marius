@@ -23,6 +23,16 @@ npz contents (catalog_idx = vocab_id - n_special):
   SASRec (dense):  topk_items int64[U, K]  (raw vocab ids),  target_item int64[U],  hist_len int64[U]
   MARIUS (gen):    topk_codes int64[U, K, L],  target_codes int64[U, L],  hist_len int64[U]
 
+Optional flags (defaults reproduce the original behavior exactly):
+  --n-results N    dump depth (default 20). N != 20 writes {model}_seed{seed}_topk{N}.npz
+                   so the validated 20-deep dumps are never clobbered. meta.json's "K"
+                   records the depth used when support tables are (re)written; it is
+                   informational only and never touched under --no-support.
+  --with-scores    adds a "scores" float32[U, N] key: MARIUS candidate joint log-probs
+                   (scoring.score_marius_tuples, teacher-forced inside the same bf16
+                   autocast as search) or SASRec logits (scoring.score_sasrec_topk).
+                   These feed the score-weighted MBR re-ranking in mbr.py.
+
 Usage (Snellius, after locating checkpoints on scratch):
   python scripts/extensions/dump_topk.py \
       --category Beauty --category-slug beauty --seed 42 \
@@ -49,23 +59,27 @@ import torch
 from omegaconf import OmegaConf
 
 from scripts.benchmark_extensions import get_best_checkpoint, run_directory_for_seed
+from scripts.extensions.scoring import score_marius_tuples, score_sasrec_topk
 from src.models import SpecialTokens
 from src.utils.tools import patch_fsspec
 
 PAD = SpecialTokens.PAD.value
 N_SPECIAL = len(SpecialTokens)
-K = 20
+K = 20  # default dump depth; override with --n-results
 
 
 class TopKCollector(L.Callback):
     """Read-only: re-run search() on each test batch and stash the ranked Top-K."""
 
-    def __init__(self, mode, limit_batches=None):
+    def __init__(self, mode, limit_batches=None, n_results=K, with_scores=False):
         self.mode = mode
         self.limit_batches = limit_batches
+        self.n_results = n_results
+        self.with_scores = with_scores
         self.topk = []
         self.target = []
         self.hist_len = []
+        self.scores = []
 
     @torch.no_grad()
     def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
@@ -79,7 +93,15 @@ class TopKCollector(L.Callback):
         autocast = torch.autocast(device_type="cuda", dtype=torch.bfloat16) if torch.cuda.is_available() \
             else contextlib.nullcontext()
         with autocast:
-            gen = pl_module.net.search(batch, n_results=K)  # dense: B x K ; gen: B x K x L
+            gen = pl_module.net.search(batch, n_results=self.n_results)  # dense: B x N ; gen: B x N x L
+            if self.with_scores:
+                # Score the dumped candidates inside the SAME autocast scope so
+                # the scores match the arithmetic that produced the ranking.
+                if self.mode == "dense":
+                    sc = score_sasrec_topk(pl_module.net, batch, gen)
+                else:
+                    sc = score_marius_tuples(pl_module.net, batch["input"], gen)
+                self.scores.append(sc.detach().float().cpu().numpy())
         target = batch["target"]
         self.topk.append(gen.detach().cpu().numpy())
 
@@ -100,10 +122,11 @@ class TopKCollector(L.Callback):
             np.concatenate(self.topk, axis=0),
             np.concatenate(self.target, axis=0),
             np.concatenate(self.hist_len, axis=0),
+            np.concatenate(self.scores, axis=0) if self.scores else None,
         )
 
 
-def run_topk(cfg, ckpt_path, *, mode, limit_batches=None):
+def run_topk(cfg, ckpt_path, *, mode, limit_batches=None, n_results=K, with_scores=False):
     patch_fsspec()
     # datamodule.setup("test") loads both the valid and test splits (see
     # src/data/datamodule.py), so both must be instantiated even though the
@@ -116,7 +139,8 @@ def run_topk(cfg, ckpt_path, *, mode, limit_batches=None):
     model = hydra.utils.instantiate(cfg["model"])
     model.full_hydra_config = cfg
 
-    collector = TopKCollector(mode=mode, limit_batches=limit_batches)
+    collector = TopKCollector(mode=mode, limit_batches=limit_batches,
+                              n_results=n_results, with_scores=with_scores)
     trainer = L.Trainer(
         accelerator="gpu",
         devices=1,
@@ -132,7 +156,7 @@ def run_topk(cfg, ckpt_path, *, mode, limit_batches=None):
     return collector.stacked()
 
 
-def write_support_tables(cfg, *, category, emb_method, quant_method, out_dir):
+def write_support_tables(cfg, *, category, emb_method, quant_method, out_dir, n_results=K):
     """Train popularity, content embeddings, semantic-ID lookup, and metadata."""
     patch_fsspec()
     fs = fsspec.filesystem(cfg.paths.protocol)
@@ -185,7 +209,7 @@ def write_support_tables(cfg, *, category, emb_method, quant_method, out_dir):
     (out_dir / "tuple_to_item.json").write_text(json.dumps(tuple_to_item))
     (out_dir / "meta.json").write_text(json.dumps({
         "category": category, "n_special": N_SPECIAL, "n_catalog": n_catalog,
-        "L": len(code_cols), "K": K,
+        "L": len(code_cols), "K": n_results,
     }, indent=2))
     print(f"Support tables written to {out_dir} (n_catalog={n_catalog}, d={d}, L={len(code_cols)})", flush=True)
 
@@ -204,6 +228,14 @@ def main() -> int:
     parser.add_argument("--output-root", type=Path, default=None)
     parser.add_argument("--results-dir", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, default=None)
+    parser.add_argument("--n-results", type=int, default=K,
+                        help=f"dump depth N (default {K}); N != {K} writes "
+                             "{model}_seed{seed}_topk{N}.npz so the validated "
+                             f"{K}-deep dumps are never clobbered")
+    parser.add_argument("--with-scores", action="store_true",
+                        help="also store per-candidate model scores: MARIUS joint "
+                             "log-probs (scoring.score_marius_tuples), SASRec logits "
+                             "(scoring.score_sasrec_topk), as float32[U, N] 'scores'")
     parser.add_argument("--smoke", action="store_true", help="only a few batches, to validate shapes cheaply")
     args = parser.parse_args()
 
@@ -233,20 +265,27 @@ def main() -> int:
         if write_support and not support_done:
             write_support_tables(
                 cfg, category=args.category, emb_method=args.emb_method,
-                quant_method=args.quant_method, out_dir=out_dir,
+                quant_method=args.quant_method, out_dir=out_dir, n_results=args.n_results,
             )
             support_done = True
 
-        topk, target, hist_len = run_topk(cfg, ckpt_path, mode=mode, limit_batches=limit)
+        topk, target, hist_len, scores = run_topk(
+            cfg, ckpt_path, mode=mode, limit_batches=limit,
+            n_results=args.n_results, with_scores=args.with_scores)
         out_dir.mkdir(parents=True, exist_ok=True)
-        npz = out_dir / f"{method}_seed{args.seed}_topk.npz"
+        suffix = "" if args.n_results == K else str(args.n_results)
+        npz = out_dir / f"{method}_seed{args.seed}_topk{suffix}.npz"
+        arrays = {}
         if mode == "dense":
-            np.savez_compressed(npz, topk_items=topk.astype(np.int64),
-                                target_item=target.astype(np.int64), hist_len=hist_len.astype(np.int64))
+            arrays.update(topk_items=topk.astype(np.int64), target_item=target.astype(np.int64))
         else:
-            np.savez_compressed(npz, topk_codes=topk.astype(np.int64),
-                                target_codes=target.astype(np.int64), hist_len=hist_len.astype(np.int64))
-        print(f"{method} seed {args.seed}: wrote {npz} (users={topk.shape[0]}, topk shape={topk.shape})", flush=True)
+            arrays.update(topk_codes=topk.astype(np.int64), target_codes=target.astype(np.int64))
+        arrays["hist_len"] = hist_len.astype(np.int64)
+        if scores is not None:
+            arrays["scores"] = scores.astype(np.float32)
+        np.savez_compressed(npz, **arrays)
+        print(f"{method} seed {args.seed}: wrote {npz} (users={topk.shape[0]}, topk shape={topk.shape}, "
+              f"scores={'yes' if scores is not None else 'no'})", flush=True)
 
     ray.shutdown()
     return 0

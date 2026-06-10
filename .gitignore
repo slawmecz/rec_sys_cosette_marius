@@ -6,6 +6,10 @@ amazon-2023/
 outputs/
 /results/
 models/
+# "models/" above is for training-output dirs, but it also matches the source
+# package src/models/; re-include it so NEW source files there are tracked
+# (already-tracked files were unaffected).
+!src/models/
 wandb/
 *.ckpt
 *.pkl
