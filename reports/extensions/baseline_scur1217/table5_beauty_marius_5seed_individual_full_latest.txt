@@ -1,0 +1,12 @@
+Amazon 2014 Beauty - MARIUS (COSETTE) test metrics (full)
+Generated: 2026-06-10T01:09:28
+Expected seeds: [42, 43, 44]
+Completed seeds: [42, 43, 44] (3/3)
+
+Per-seed results (R@5, NDCG@5, R@10, NDCG@10 on test)
+
+seed | run                                            | R@5   | NDCG@5 | R@10  | NDCG@10
+-----+------------------------------------------------+-------+--------+-------+--------
+42   | MARIUS_small_Beauty_seed42_2026-06-10_00-16-26 | 5.41% | 3.54%  | 8.48% | 4.53%  
+43   | MARIUS_small_Beauty_seed43_2026-06-09_18-27-43 | 5.30% | 3.49%  | 8.08% | 4.38%  
+44   | MARIUS_small_Beauty_seed44_2026-06-09_19-21-00 | 5.29% | 3.45%  | 8.21% | 4.39%  

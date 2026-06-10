@@ -33,6 +33,7 @@ Usage (Snellius, after locating checkpoints on scratch):
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import pickle
@@ -70,7 +71,15 @@ class TopKCollector(L.Callback):
     def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
         if self.limit_batches is not None and batch_idx >= self.limit_batches:
             return
-        gen = pl_module.net.search(batch, n_results=K)  # dense: B x K ; gen: B x K x L
+        # The model trains/evals under bf16-mixed autocast; the LitModule's own
+        # test_step runs search() inside that autocast scope. Callback hooks fire
+        # OUTSIDE it, and running the generative beam search in fp32 collapses the
+        # depth decoder to PAD (degenerate all-zero codes). Re-enter autocast so
+        # the dumped Top-K matches the metrics the evaluator reports.
+        autocast = torch.autocast(device_type="cuda", dtype=torch.bfloat16) if torch.cuda.is_available() \
+            else contextlib.nullcontext()
+        with autocast:
+            gen = pl_module.net.search(batch, n_results=K)  # dense: B x K ; gen: B x K x L
         target = batch["target"]
         self.topk.append(gen.detach().cpu().numpy())
 
@@ -96,7 +105,10 @@ class TopKCollector(L.Callback):
 
 def run_topk(cfg, ckpt_path, *, mode, limit_batches=None):
     patch_fsspec()
-    cfg.data.ray_datasets.which = ["test"]
+    # datamodule.setup("test") loads both the valid and test splits (see
+    # src/data/datamodule.py), so both must be instantiated even though the
+    # TopKCollector only runs on test batches.
+    cfg.data.ray_datasets.which = ["valid", "test"]
     ray_datasets = hydra.utils.instantiate(cfg.data.ray_datasets, paths=cfg.paths)
     datamodule = hydra.utils.instantiate(cfg.data.datamodule, ray_datasets=ray_datasets)
     datamodule.setup(stage="test")

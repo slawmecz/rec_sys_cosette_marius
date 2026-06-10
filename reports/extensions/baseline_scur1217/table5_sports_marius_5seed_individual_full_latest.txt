@@ -1,0 +1,12 @@
+Amazon 2014 Sports and Outdoors - MARIUS (COSETTE) test metrics (full)
+Generated: 2026-06-09T21:48:09
+Expected seeds: [42, 43, 44]
+Completed seeds: [42, 43, 44] (3/3)
+
+Per-seed results (R@5, NDCG@5, R@10, NDCG@10 on test)
+
+seed | run                                                         | R@5   | NDCG@5 | R@10  | NDCG@10
+-----+-------------------------------------------------------------+-------+--------+-------+--------
+42   | MARIUS_small_Sports_and_Outdoors_seed42_2026-06-09_19-08-34 | 2.98% | 1.94%  | 4.63% | 2.47%  
+43   | MARIUS_small_Sports_and_Outdoors_seed43_2026-06-09_20-01-58 | 2.95% | 1.90%  | 4.70% | 2.47%  
+44   | MARIUS_small_Sports_and_Outdoors_seed44_2026-06-09_20-54-51 | 2.98% | 1.90%  | 4.81% | 2.49%  

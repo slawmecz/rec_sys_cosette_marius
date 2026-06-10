@@ -47,9 +47,24 @@ def load_model_recs(dump_dir: Path, model: str, seed: int, meta: dict, t2i: dict
         recs = [[int(v) - ns if int(v) >= ns else ba.HALLUCINATION for v in row] for row in npz["topk_items"]]
         targets = [int(t) - ns if int(t) >= ns else ba.HALLUCINATION for t in npz["target_item"]]
     else:
-        recs = [[t2i.get(",".join(str(int(c)) for c in code), ba.HALLUCINATION) for code in row]
-                for row in npz["topk_codes"]]
-        targets = [t2i.get(",".join(str(int(c)) for c in code), ba.HALLUCINATION) for code in npz["target_codes"]]
+        # MARIUS emits semantic-ID *token* ids, where (see src/data/marius.py)
+        #   token[l] = code[l] + l*K + n_special.
+        # tuple_to_item is keyed by raw per-level codes in [0, K), so de-offset
+        # each level before the lookup. Codes that fall outside [0, K) after
+        # de-offsetting (e.g. an emitted special token) are genuine
+        # hallucinations and map to ba.HALLUCINATION.
+        L = meta["L"]
+        K = max(int(x) for key in t2i for x in key.split(",")) + 1
+        level_off = [l * K + ns for l in range(L)]
+
+        def to_item(code):
+            raw = [int(c) - level_off[l] for l, c in enumerate(code)]
+            if any(r < 0 or r >= K for r in raw):
+                return ba.HALLUCINATION
+            return t2i.get(",".join(str(r) for r in raw), ba.HALLUCINATION)
+
+        recs = [[to_item(code) for code in row] for row in npz["topk_codes"]]
+        targets = [to_item(code) for code in npz["target_codes"]]
     return recs, targets
 
 
@@ -93,21 +108,29 @@ def _selftest() -> int:
         codes = rng.integers(0, 256, size=(n_catalog, L))
         t2i = {",".join(str(int(c)) for c in codes[i]): i for i in range(n_catalog)}
         (d / "tuple_to_item.json").write_text(json.dumps(t2i))
+        # MARIUS emits semantic-ID *token* ids: token[l] = code[l] + l*K_cb + n_special
+        # (see src/data/marius.py). Fabricate the dumps in that token space so the
+        # selftest exercises the same de-offset load_model_recs applies; K_cb is
+        # derived exactly the way load_model_recs derives it (max raw code + 1).
+        K_cb = max(int(x) for key in t2i for x in key.split(",")) + 1
+        level_off = np.arange(L) * K_cb + n_special
         for seed in (42, 43):
             np.savez_compressed(
                 d / f"sasrec_seed{seed}_topk.npz",
                 topk_items=(rng.integers(n_special, n_special + n_catalog, size=(U, K))).astype(np.int64),
                 target_item=(rng.integers(n_special, n_special + n_catalog, size=U)).astype(np.int64),
                 hist_len=(rng.integers(1, 50, U)).astype(np.int64))
-            # marius: real items + ~10% out-of-vocab tuples (hallucinations)
+            # marius: real items in token space + ~10% PAD tuples that de-offset
+            # out of range and so are counted as hallucinations.
             pick = rng.integers(0, n_catalog, size=(U, K))
-            topk_codes = codes[pick]
+            topk_codes = codes[pick] + level_off
             halluc = rng.random((U, K)) < 0.1
-            topk_codes[halluc] = rng.integers(0, 256, size=(halluc.sum(), L))
+            topk_codes[halluc] = 0
+            target_codes = codes[rng.integers(0, n_catalog, size=U)] + level_off
             np.savez_compressed(
                 d / f"marius_seed{seed}_topk.npz",
                 topk_codes=topk_codes.astype(np.int64),
-                target_codes=codes[rng.integers(0, n_catalog, size=U)].astype(np.int64),
+                target_codes=target_codes.astype(np.int64),
                 hist_len=(rng.integers(1, 50, U)).astype(np.int64))
         out = compute_table(d, ["sasrec", "marius"], [42, 43], [10, 20])
         assert not out.empty and len(out) == 4, out
