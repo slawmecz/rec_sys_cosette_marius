@@ -238,6 +238,30 @@ def fmt_per_seed(df):
 
 def write_report(out_path: Path, category, df, means, delta, k, mode, topm, weight_used, tau, n_results):
     tau_str = f"{tau}" if weight_used == "scores" else "n/a (uniform weights)"
+    if weight_used == "scores":
+        scope = """## Scope
+
+This run uses SCORE-WEIGHTED MBR: w_j = softmax(log p_j / tau) over the
+model's own candidate log-probabilities (the "scores" key of the dumps),
+so confident candidates dominate the consensus. Lower tau concentrates the
+weights toward the beam's argmax (tau -> 0 recovers the original order);
+higher tau approaches the uniform-weight lower bound. Compare against the
+uniform variant to see how much accuracy the confidence weighting recovers."""
+    else:
+        scope = """## Scope and expectation management
+
+This run uses UNIFORM candidate weights (w_j = 1/C) because the dumps carry
+no candidate scores. Uniform-weight MBR ignores the model's confidence
+entirely: a candidate from a large cluster of mutually similar beam entries
+is promoted even if every member of that cluster has low probability. It can
+therefore HURT accuracy, and the numbers below should be read as a LOWER
+BOUND on what score-weighted MBR (w_j = softmax(log p_j / tau), enabled
+automatically once dumps carry a "scores" key) can do.
+
+The secondary question the same run answers: does consensus re-ranking at
+least move the DIVERSITY metrics (coverage, Gini, ARP, APLT) in the right
+direction, i.e. is the MBR-consensus pick less popularity-peaked than the
+beam's raw log-prob order?"""
     body = f"""# MBR re-ranking pilot: {category}
 
 MBR (Minimum Bayes Risk) re-ranking of MARIUS's dumped beam candidates
@@ -248,21 +272,7 @@ beam order). Metrics at k = {k}, seeds {sorted(df['seed'].unique().tolist())},
 mode = {mode}{f" (m = {topm})" if mode == "mbr_topm" else ""},
 weights = {weight_used}, tau = {tau_str}.
 
-## Scope and expectation management
-
-This pilot uses UNIFORM candidate weights (w_j = 1/C) because the committed
-20-deep dumps store no candidate scores. Uniform-weight MBR ignores the
-model's confidence entirely: a candidate from a large cluster of mutually
-similar beam entries is promoted even if every member of that cluster has low
-probability. It can therefore HURT accuracy, and the numbers below should be
-read as a LOWER BOUND on what score-weighted MBR (w_j = softmax(log p_j / tau),
-enabled automatically once dumps carry a "scores" key) can do. Tonight's run
-primarily validates the plumbing end to end on real dumps.
-
-The secondary question the same run answers: does consensus re-ranking at
-least move the DIVERSITY metrics (coverage, Gini, ARP, APLT) in the right
-direction, i.e. is the MBR-consensus pick less popularity-peaked than the
-beam's raw log-prob order?
+{scope}
 
 ## Mean over seeds (k = {k})
 

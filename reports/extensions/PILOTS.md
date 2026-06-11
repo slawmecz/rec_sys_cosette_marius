@@ -7,10 +7,44 @@ pilots reuse the validated loaders in scripts/extensions/compute_beyond_accuracy
 
 | Pilot | Code | Results | Status |
 |---|---|---|---|
-| REACH (collapse mechanism) | scripts/extensions/reach_analysis.py | reports/extensions/reach/ | DONE (local, 0 GPU) |
-| Conformal sets | scripts/extensions/conformal.py | reports/extensions/conformal/ | DONE depth-20 (local); depth-100 pending dumps |
-| MBR re-ranking | scripts/extensions/mbr.py (+ scoring.py, dump_topk.py --n-results/--with-scores) | reports/extensions/mbr/ | uniform-weight variant DONE (local); score-weighted pending Snellius dumps |
-| FUSE (un-sum fusion) | src/models/marius_fuse.py (+ scripts/extensions/fuse_selftest.py) | pending Snellius runs | code verified (33-check selftest); needs smoke + 3-seed runs |
+| REACH (collapse mechanism) | scripts/extensions/reach_analysis.py | reports/extensions/reach/ (+ reach_cb2/) | DONE; confirmed on a 2nd Sports codebook |
+| Conformal sets | scripts/extensions/conformal.py | reports/extensions/conformal/ (+ conformal_d100/) | DONE at depth 20 and depth 100 |
+| MBR re-ranking | scripts/extensions/mbr.py (+ scoring.py, dump_topk.py --n-results/--with-scores) | reports/extensions/mbr/ | DONE: uniform + scored tau sweep at depth 100 |
+| FUSE (un-sum fusion) | src/models/marius_fuse.py (+ scripts/extensions/fuse_selftest.py) | reports/extensions/fuse/ | DONE: 3-seed Beauty runs for level_gain and attn |
+
+## Final pilot outcomes (all Snellius runs complete)
+
+1. REACH: the collapse is STRUCTURAL, not a codebook artifact. A second
+   freshly-trained Sports codebook (67e0) reproduces it within 1-2 points:
+   coverage 0.375 (vs 0.392), never-emitted L1:L2 pairs 27.8% (vs 25.6%),
+   invisible demand mass 23.3% (vs 22.2%), top predictor own-share-within-L1
+   r = -0.621 (identical), 0 L1 codes pruned.
+2. MBR (scored, depth-100 candidates, k=10): NOT an accuracy fix, but a clean
+   tunable accuracy-vs-reach dial. Sports: beam R@10 0.0471 -> tau0.5 0.0412
+   with coverage 0.39 -> 0.52, ARP 101 -> 73, tail-recall +32% (0.0112 ->
+   0.0148; improves at EVERY tau). Beauty: 0.0825 -> 0.0719 with coverage
+   0.71 -> 0.81. Confidence weighting recovers most of what uniform MBR
+   loses (uniform: 0.0266 / 0.0446). topm10 reproduces the beam exactly
+   (sanity).
+3. Conformal at depth 100: ceilings roughly double (Beauty marius 0.258 /
+   sasrec 0.245; Sports 0.174 / 0.164). NOTE the crossover: at depth 20
+   SASRec++ has the higher ceiling, at depth 100 MARIUS does, on BOTH
+   datasets. MARIUS's deeper candidate pool is better than the baseline's;
+   its likelihood ORDERING of the top of the list is what wastes it.
+4. FUSE: the sum-fusion is NOT the bottleneck. 3-seed Beauty R@10:
+   level_gain 8.29 +/- 0.09, attn 8.23 +/- 0.15 vs baseline 8.26 +/- 0.20
+   (all within noise). level_gain mildly improves every beyond-accuracy
+   metric at zero accuracy cost (coverage 0.714 vs 0.707, tail-recall 0.0387
+   vs 0.0366); attn is neutral-to-slightly-worse. A clean, honest negative
+   for the architectural hypothesis that strengthens the decoding-side story.
+
+Combined verdict: the evidence points at ONE coherent paper, "catalog
+collapse in semantic-ID generative recommenders": diagnosis (step-2 sibling
+competition, robust across codebooks), stakes (22-23% of demand invisible),
+locus (decoding, not architecture: FUSE null + the depth-100 crossover), and
+decode-time levers (MBR Pareto, conformal reliability). The open method gap
+is a mechanism-TARGETED decoder (pair-level exploration at depth step 2)
+that should dominate the generic MBR Pareto.
 
 ## Key pilot results so far
 
