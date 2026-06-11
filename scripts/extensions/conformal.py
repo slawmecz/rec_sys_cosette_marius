@@ -59,10 +59,13 @@ import pandas as pd
 REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
+from scripts.extensions import beyond_accuracy as ba  # noqa: E402
 from scripts.extensions.compute_beyond_accuracy import load_support, load_model_recs  # noqa: E402
 
-DEPTH = 20                  # beam / top-k depth of the local dumps
-ABSENT = DEPTH + 1          # rank sentinel: target not in the top-DEPTH list (infinity)
+DEPTH = 20                  # DEFAULT depth (validated dumps); the live depth is
+                            # read per-dump from the topk npz array shape, so this
+                            # is only the fallback used by the standalone selftest.
+ABSENT = DEPTH + 1          # rank sentinel at the default depth (selftest only)
 BUCKETS = [(0, 5, "hist<=5"), (6, 15, "hist6-15"), (16, 10 ** 9, "hist>=16")]
 DEFAULT_COVERAGES = (0.04, 0.06, 0.08, 0.10, 0.12)
 DEFAULT_MONDRIAN = (0.08, 0.06)
@@ -101,13 +104,13 @@ def split_indices(n_users, split_seed=0):
 
 def conformal_k_star(cal_ranks, coverage, depth=DEPTH):
     """Split-conformal threshold: the m-th smallest calibration rank with
-    m = ceil((n_cal + 1) * coverage). Returns (k_star, m); k_star = ABSENT
+    m = ceil((n_cal + 1) * coverage). Returns (k_star, m); k_star = depth + 1
     (> depth) means the coverage is unachievable at this dump depth."""
     cal = np.asarray(cal_ranks)
     n = cal.size
     m = int(math.ceil((n + 1) * coverage))
     if m > n:
-        return ABSENT, m
+        return depth + 1, m
     k = int(np.sort(cal)[m - 1])
     return k, m
 
@@ -151,27 +154,33 @@ def canonical_hist(npz, model, sasrec_hist=None):
     return h
 
 
-def analyze_seed(recs, ranks, n_hist, cal_idx, eval_idx, coverages, mondrian_coverages):
+def analyze_seed(recs, ranks, n_hist, cal_idx, eval_idx, coverages,
+                 mondrian_coverages, depth=DEPTH):
     """All split-conformal and Mondrian rows for one (model, seed). Returns
-    (split_rows, mondrian_rows) as lists of dicts (no model/seed keys yet)."""
+    (split_rows, mondrian_rows) as lists of dicts (no model/seed keys yet).
+
+    `depth` is the live dump depth; the ceiling is Recall@depth and k* is
+    achievable only when k* <= depth. The ceiling columns are named depth-
+    agnostically (ceiling_recall_eval/all, bucket_recall_eval); read the actual
+    depth from the 'depth' column run_category stamps on each row."""
     valid = ranks >= 0
     cal = cal_idx[valid[cal_idx]]
     ev = eval_idx[valid[eval_idx]]
     cal_r, ev_r = ranks[cal], ranks[ev]
-    ceiling_eval = float(np.mean(ev_r <= DEPTH))   # achievable coverage ceiling
-    ceiling_all = float(np.mean(ranks[valid] <= DEPTH))
+    ceiling_eval = float(np.mean(ev_r <= depth))   # achievable coverage ceiling
+    ceiling_all = float(np.mean(ranks[valid] <= depth))
 
     split_rows = []
     for c in coverages:
-        k, m = conformal_k_star(cal_r, c)
-        achievable = k <= DEPTH
+        k, m = conformal_k_star(cal_r, c, depth=depth)
+        achievable = k <= depth
         emp = float(np.mean(ev_r <= k)) if achievable else float("nan")
         eff = mean_effective_set_size(recs, ev, k) if achievable else float("nan")
         split_rows.append({
             "target_coverage": c, "n_cal": int(cal.size), "n_eval": int(ev.size),
             "m": m, "k_star": k, "achievable": achievable,
             "empirical_coverage": emp, "effective_set_size": eff,
-            "ceiling_recall20_eval": ceiling_eval, "ceiling_recall20_all": ceiling_all,
+            "ceiling_recall_eval": ceiling_eval, "ceiling_recall_all": ceiling_all,
         })
 
     mond_rows = []
@@ -179,40 +188,90 @@ def analyze_seed(recs, ranks, n_hist, cal_idx, eval_idx, coverages, mondrian_cov
         for lo, hi, label in BUCKETS:
             bc = cal[(n_hist[cal] >= lo) & (n_hist[cal] <= hi)]
             be = ev[(n_hist[ev] >= lo) & (n_hist[ev] <= hi)]
-            k, m = conformal_k_star(ranks[bc], c)
-            achievable = k <= DEPTH
+            k, m = conformal_k_star(ranks[bc], c, depth=depth)
+            achievable = k <= depth
             emp = float(np.mean(ranks[be] <= k)) if (achievable and be.size) else float("nan")
-            ceiling_b = float(np.mean(ranks[be] <= DEPTH)) if be.size else float("nan")
+            ceiling_b = float(np.mean(ranks[be] <= depth)) if be.size else float("nan")
             mond_rows.append({
                 "target_coverage": c, "bucket": label,
                 "n_cal": int(bc.size), "n_eval": int(be.size), "m": m,
                 "k_star": k, "achievable": achievable,
-                "empirical_coverage": emp, "bucket_recall20_eval": ceiling_b,
+                "empirical_coverage": emp, "bucket_recall_eval": ceiling_b,
             })
     return split_rows, mond_rows
 
 
-def run_category(dump_dir: Path, models, seeds, coverages, mondrian_coverages, split_seed=0):
-    """Returns (split_df, mondrian_df) over all (model, seed) found in dump_dir."""
+def _dump_suffix(n_results: int) -> str:
+    """File suffix for {model}_seed{seed}_topk{suffix}.npz (matches dump_topk.py)."""
+    return "" if n_results == DEPTH else str(n_results)
+
+
+def load_recs_at_depth(dump_dir: Path, model: str, seed: int, meta: dict, t2i: dict,
+                       n_results: int = DEPTH):
+    """(recs, targets) for an arbitrary dump depth.
+
+    For the validated depth-20 dumps this delegates to the shared
+    compute_beyond_accuracy.load_model_recs. For deeper dumps written by
+    dump_topk.py --n-results N (file suffix topk{N}.npz) it applies the
+    identical de-offset + lookup, kept byte-for-byte in sync with that loader
+    (and with mbr.load_marius_dump)."""
+    if n_results == DEPTH:
+        return load_model_recs(dump_dir, model, seed, meta, t2i)
+    npz = np.load(dump_dir / f"{model}_seed{seed}_topk{_dump_suffix(n_results)}.npz")
+    ns = meta["n_special"]
+    if model == "sasrec":
+        recs = [[int(v) - ns if int(v) >= ns else ba.HALLUCINATION for v in row]
+                for row in npz["topk_items"]]
+        targets = [int(t) - ns if int(t) >= ns else ba.HALLUCINATION
+                   for t in npz["target_item"]]
+        return recs, targets
+    L = meta["L"]
+    K = max(int(x) for key in t2i for x in key.split(",")) + 1
+    level_off = [l * K + ns for l in range(L)]
+
+    def to_item(code):
+        raw = [int(c) - level_off[l] for l, c in enumerate(code)]
+        if any(r < 0 or r >= K for r in raw):
+            return ba.HALLUCINATION
+        return t2i.get(",".join(str(r) for r in raw), ba.HALLUCINATION)
+
+    recs = [[to_item(code) for code in row] for row in npz["topk_codes"]]
+    targets = [to_item(code) for code in npz["target_codes"]]
+    return recs, targets
+
+
+def run_category(dump_dir: Path, models, seeds, coverages, mondrian_coverages,
+                 split_seed=0, n_results=DEPTH):
+    """Returns (split_df, mondrian_df) over all (model, seed) found in dump_dir.
+
+    The dump depth is read from the topk npz array shape (axis 1), not the
+    DEPTH constant, so the same code runs on the depth-20 or the depth-100
+    dumps; the per-category report stamps the depth it actually used."""
     meta, _pop, _emb, t2i = load_support(dump_dir)
+    suffix = _dump_suffix(n_results)
     split_all, mond_all = [], []
     for model in models:
         for seed in seeds:
-            npz_path = dump_dir / f"{model}_seed{seed}_topk.npz"
+            npz_path = dump_dir / f"{model}_seed{seed}_topk{suffix}.npz"
             if not npz_path.exists():
                 print(f"  (skip {model} seed {seed}: no dump)", flush=True)
                 continue
-            recs, targets = load_model_recs(dump_dir, model, seed, meta, t2i)
+            recs, targets = load_recs_at_depth(dump_dir, model, seed, meta, t2i, n_results)
             npz = np.load(npz_path)
-            sas_path = dump_dir / f"sasrec_seed{seed}_topk.npz"
+            # Live depth from the dumped Top-K array shape (sasrec: [U, K];
+            # marius: [U, K, L]); both models in a category share this depth.
+            arr = npz["topk_items"] if model == "sasrec" else npz["topk_codes"]
+            depth = int(arr.shape[1])
+            sas_path = dump_dir / f"sasrec_seed{seed}_topk{suffix}.npz"
             sas_hist = np.load(sas_path)["hist_len"].astype(np.int64) if (
                 model == "marius" and sas_path.exists()) else None
             n_hist = canonical_hist(npz, model, sasrec_hist=sas_hist)
-            ranks = ranks_from_recs(recs, targets)
+            ranks = ranks_from_recs(recs, targets, depth=depth)
             cal_idx, eval_idx = split_indices(len(recs), split_seed)
             srows, mrows = analyze_seed(recs, ranks, n_hist, cal_idx, eval_idx,
-                                        coverages, mondrian_coverages)
-            base = {"category": meta["category"], "model": model, "seed": seed}
+                                        coverages, mondrian_coverages, depth=depth)
+            base = {"category": meta["category"], "model": model, "seed": seed,
+                    "depth": depth}
             split_all += [{**base, **r} for r in srows]
             mond_all += [{**base, **r} for r in mrows]
     return pd.DataFrame(split_all), pd.DataFrame(mond_all)
@@ -221,12 +280,12 @@ def run_category(dump_dir: Path, models, seeds, coverages, mondrian_coverages, s
 # --------------------------------------------------------------------------- #
 # Reporting
 # --------------------------------------------------------------------------- #
-def _fmt_k(sub: pd.DataFrame) -> str:
-    """Seed-aggregate display of k_star: mean if all seeds achievable, else >20."""
+def _fmt_k(sub: pd.DataFrame, depth: int = DEPTH) -> str:
+    """Seed-aggregate display of k_star: mean if all seeds achievable, else >depth."""
     n_seeds = len(sub)
     n_ach = int(sub["achievable"].sum())
     if n_ach < n_seeds:
-        return f">20 ({n_ach}/{n_seeds} seeds achievable)"
+        return f">{depth} ({n_ach}/{n_seeds} seeds achievable)"
     ks = sub["k_star"].astype(float)
     per_seed = "/".join(str(int(k)) for k in sub["k_star"])
     return f"{ks.mean():.2f} ({per_seed})"
@@ -242,7 +301,15 @@ def _fmt_cov(sub: pd.DataFrame, col="empirical_coverage") -> str:
     return s
 
 
+def _depth_of(df: pd.DataFrame) -> int:
+    """Live dump depth stamped by run_category; falls back to DEPTH."""
+    if "depth" in df.columns and not df["depth"].empty:
+        return int(df["depth"].iloc[0])
+    return DEPTH
+
+
 def split_table_md(split_df: pd.DataFrame, models) -> str:
+    depth = _depth_of(split_df)
     lines = ["| target c | " + " | ".join(
         f"{m}: k* | {m}: emp. cov." for m in models) + " |"]
     lines.append("|" + "---|" * (1 + 2 * len(models)))
@@ -253,14 +320,15 @@ def split_table_md(split_df: pd.DataFrame, models) -> str:
             if sub.empty:
                 cells += ["-", "-"]
             else:
-                cells += [_fmt_k(sub), _fmt_cov(sub)]
+                cells += [_fmt_k(sub, depth), _fmt_cov(sub)]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines)
 
 
 def mondrian_table_md(mond_df: pd.DataFrame, models, coverage) -> str:
+    depth = _depth_of(mond_df)
     sub_c = mond_df[np.isclose(mond_df["target_coverage"], coverage)]
-    lines = ["| bucket | n_cal | bucket Recall@20 (eval) | " + " | ".join(
+    lines = ["| bucket | n_cal | bucket Recall@%d (eval) | " % depth + " | ".join(
         f"{m}: k* | {m}: emp. cov." for m in models) + " |"]
     lines.append("|" + "---|" * (3 + 2 * len(models)))
     for _lo, _hi, label in BUCKETS:
@@ -272,14 +340,14 @@ def mondrian_table_md(mond_df: pd.DataFrame, models, coverage) -> str:
         ceil_parts = []
         for m in models:
             s = sub_b[sub_b["model"] == m]
-            ceil_parts.append(f"{m[:3]} {s['bucket_recall20_eval'].mean():.3f}" if not s.empty else "")
+            ceil_parts.append(f"{m[:3]} {s['bucket_recall_eval'].mean():.3f}" if not s.empty else "")
         cells.append(", ".join(p for p in ceil_parts if p))
         for m in models:
             s = sub_b[sub_b["model"] == m]
             if s.empty:
                 cells += ["-", "-"]
             else:
-                cells += [_fmt_k(s), _fmt_cov(s)]
+                cells += [_fmt_k(s, depth), _fmt_cov(s)]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines)
 
@@ -288,13 +356,14 @@ def write_category_md(out_dir: Path, category: str, split_df, mond_df, models,
                       mondrian_coverages) -> Path:
     sd = split_df[split_df["category"] == category]
     md = mond_df[mond_df["category"] == category]
+    depth = _depth_of(sd)
     n_cal = int(sd["n_cal"].iloc[0])
     n_eval = int(sd["n_eval"].iloc[0])
     seeds = sorted(sd["seed"].unique())
     lines = [
         f"# Conformal recommendation sets: {category}",
         "",
-        f"Split conformal on rank nonconformity over the frozen depth-{DEPTH} Top-K",
+        f"Split conformal on rank nonconformity over the frozen depth-{depth} Top-K",
         f"dumps (reports/extensions/topk/{category}). Users split 50/50 into",
         f"calibration (n={n_cal}) / evaluation (n={n_eval}) with numpy rng seed 0;",
         f"seeds {', '.join(str(s) for s in seeds)}; values below are seed means",
@@ -302,10 +371,10 @@ def write_category_md(out_dir: Path, category: str, split_df, mond_df, models,
         "",
         "## Feasibility ceiling",
         "",
-        "With a single held-out positive and a depth-20 list, the largest coverage",
-        "any conformal wrapper can guarantee is the model's Recall@20:",
+        f"With a single held-out positive and a depth-{depth} list, the largest coverage",
+        f"any conformal wrapper can guarantee is the model's Recall@{depth}:",
         "",
-        "| model | Recall@20 (eval half) | Recall@20 (all users) |",
+        f"| model | Recall@{depth} (eval half) | Recall@{depth} (all users) |",
         "|---|---|---|",
     ]
     for m in models:
@@ -313,11 +382,11 @@ def write_category_md(out_dir: Path, category: str, split_df, mond_df, models,
         if s.empty:
             continue
         one = s.drop_duplicates(subset=["seed"])
-        lines.append(f"| {m} | {one['ceiling_recall20_eval'].mean():.4f} | "
-                     f"{one['ceiling_recall20_all'].mean():.4f} |")
+        lines.append(f"| {m} | {one['ceiling_recall_eval'].mean():.4f} | "
+                     f"{one['ceiling_recall_all'].mean():.4f} |")
     lines += [
         "",
-        "Targets above this ceiling are marked unachievable (>20). Conventional",
+        f"Targets above this ceiling are marked unachievable (>{depth}). Conventional",
         "90% coverage guarantees are impossible for next-item hit at this depth.",
         "",
         "## Split conformal: target coverage -> set size k* -> empirical coverage",
@@ -365,6 +434,7 @@ def write_category_md(out_dir: Path, category: str, split_df, mond_df, models,
 
 def _headline_lines(sd: pd.DataFrame, md_df: pd.DataFrame, models, primary) -> list:
     """Computed (not hand-written) headline bullets for the summary."""
+    depth = _depth_of(sd)
     lines = ["## Headline", ""]
     if len(models) == 2:
         a, b = models
@@ -387,7 +457,7 @@ def _headline_lines(sd: pd.DataFrame, md_df: pd.DataFrame, models, primary) -> l
                     f" {x0:.2f} vs {y0:.2f}).")
             else:
                 lines.append(f"- {cat}: no target coverage is achievable for both "
-                             "models at depth 20.")
+                             f"models at depth {depth}.")
     for cat in sorted(md_df["category"].unique()):
         m = md_df[md_df["category"] == cat]
         cold_label, warm_label = BUCKETS[0][2], BUCKETS[-1][2]
@@ -410,7 +480,7 @@ def _headline_lines(sd: pd.DataFrame, md_df: pd.DataFrame, models, primary) -> l
                 break
         else:
             lines.append(f"- {cat} Mondrian: no tested coverage is achievable in "
-                         "every bucket at depth 20.")
+                         f"every bucket at depth {depth}.")
     lines.append("")
     return lines
 
@@ -421,20 +491,21 @@ def write_summary_md(out_dir: Path, models, mondrian_primary=0.08) -> Path:
     sd = pd.concat([pd.read_csv(f) for f in split_files], ignore_index=True)
     mond_files = sorted(out_dir.glob("mondrian_*.csv"))
     md_df = pd.concat([pd.read_csv(f) for f in mond_files], ignore_index=True)
+    depth = _depth_of(sd)
     lines = [
         "# Conformal recommendation sets: feasibility pilot (summary)",
         "",
         "Split conformal prediction on rank nonconformity, wrapped around the",
-        f"frozen MARIUS and SASRec++ depth-{DEPTH} Top-K dumps (3 seeds, 50/50",
+        f"frozen MARIUS and SASRec++ depth-{depth} Top-K dumps (3 seeds, 50/50",
         "calibration/evaluation split, numpy rng seed 0). Full method and",
         "per-category detail in conformal_<category>.md.",
         "",
         "## Honest feasibility verdict",
         "",
-        "With a single held-out positive per user and lists truncated at depth 20,",
-        "the largest guaranteeable coverage equals the model's Recall@20:",
+        f"With a single held-out positive per user and lists truncated at depth {depth},",
+        f"the largest guaranteeable coverage equals the model's Recall@{depth}:",
         "",
-        "| category | model | coverage ceiling (Recall@20, eval half) |",
+        f"| category | model | coverage ceiling (Recall@{depth}, eval half) |",
         "|---|---|---|",
     ]
     for cat in sorted(sd["category"].unique()):
@@ -442,7 +513,7 @@ def write_summary_md(out_dir: Path, models, mondrian_primary=0.08) -> Path:
             s = sd[(sd["category"] == cat) & (sd["model"] == m)].drop_duplicates(subset=["seed"])
             if s.empty:
                 continue
-            lines.append(f"| {cat} | {m} | {s['ceiling_recall20_eval'].mean():.4f} |")
+            lines.append(f"| {cat} | {m} | {s['ceiling_recall_eval'].mean():.4f} |")
     lines += [
         "",
         "So conventional 90% (or even 20%) next-item coverage guarantees are",
@@ -475,15 +546,27 @@ def write_summary_md(out_dir: Path, models, mondrian_primary=0.08) -> Path:
         for cat in sorted(md_df["category"].unique()):
             lines += [f"### {cat}", "",
                       mondrian_table_md(md_df[md_df["category"] == cat], models, c), ""]
-    lines += [
-        "## Deeper-beam dependency",
-        "",
-        "Raising the coverage ceiling requires deeper ranked lists than the local",
-        "depth-20 dumps. The extended dump_topk.py run planned by the MBR agent",
-        "(--n-results 100, both marius and sasrec) produces exactly the artifacts",
-        "needed; re-running this script on those dumps is the only follow-up.",
-        "",
-    ]
+    if depth <= DEPTH:
+        lines += [
+            "## Deeper-beam dependency",
+            "",
+            "Raising the coverage ceiling requires deeper ranked lists than the local",
+            f"depth-{depth} dumps. The extended dump_topk.py run (--n-results 100, both",
+            "marius and sasrec) produces exactly the artifacts needed; re-running this",
+            "script on those dumps (it reads the depth from the npz shape) is the only",
+            "follow-up.",
+            "",
+        ]
+    else:
+        lines += [
+            "## Deeper beam (this run)",
+            "",
+            f"These sets are computed on the depth-{depth} dumps (dump_topk.py",
+            f"--n-results {depth}); the ceiling is Recall@{depth}, well above the",
+            "depth-20 numbers, so larger coverage targets are now achievable (see the",
+            "split-conformal tables above for where k* lands).",
+            "",
+        ]
     path = out_dir / "conformal_summary.md"
     path.write_text("\n".join(lines))
     return path
@@ -609,6 +692,10 @@ def main() -> int:
     parser.add_argument("--category", default="Beauty")
     parser.add_argument("--models", default="sasrec marius")
     parser.add_argument("--seeds", default="42 43 44")
+    parser.add_argument("--n-results", type=int, default=DEPTH,
+                        help=f"dump depth to read; != {DEPTH} reads "
+                             "{model}_seed{seed}_topk{N}.npz. The live depth used "
+                             "for the math is still read from the npz array shape.")
     parser.add_argument("--coverages", default=" ".join(str(c) for c in DEFAULT_COVERAGES))
     parser.add_argument("--mondrian-coverages",
                         default=" ".join(str(c) for c in DEFAULT_MONDRIAN))
@@ -628,7 +715,8 @@ def main() -> int:
     mondrian_coverages = [float(c) for c in args.mondrian_coverages.split()]
 
     split_df, mond_df = run_category(dump_dir, models, seeds, coverages,
-                                     mondrian_coverages, args.split_seed)
+                                     mondrian_coverages, args.split_seed,
+                                     n_results=args.n_results)
     if split_df.empty:
         print(f"No dumps found under {dump_dir}.", flush=True)
         return 1
@@ -647,7 +735,7 @@ def main() -> int:
     print(split_df[cols].to_string(index=False), flush=True)
     print()
     mcols = ["model", "seed", "target_coverage", "bucket", "n_cal", "k_star",
-             "achievable", "empirical_coverage", "bucket_recall20_eval"]
+             "achievable", "empirical_coverage", "bucket_recall_eval"]
     print(mond_df[mcols].to_string(index=False), flush=True)
     print(f"\nWrote {split_csv}\nWrote {mond_csv}\nWrote {md_path}\nWrote {summary_path}",
           flush=True)

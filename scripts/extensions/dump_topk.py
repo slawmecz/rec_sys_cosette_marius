@@ -126,12 +126,21 @@ class TopKCollector(L.Callback):
         )
 
 
-def run_topk(cfg, ckpt_path, *, mode, limit_batches=None, n_results=K, with_scores=False):
+def run_topk(cfg, ckpt_path, *, mode, limit_batches=None, n_results=K,
+             with_scores=False, eval_batch_size=None):
     patch_fsspec()
     # datamodule.setup("test") loads both the valid and test splits (see
     # src/data/datamodule.py), so both must be instantiated even though the
     # TopKCollector only runs on test batches.
     cfg.data.ray_datasets.which = ["valid", "test"]
+    # The test dataloader batches at datamodule.valid_batch_size; a wide beam
+    # (--n-results 100) blows the beam-expansion tensor up ~n_results-fold, so a
+    # batch sized for the 20-wide beam OOMs at 100. Shrinking the eval batch is
+    # a pure memory/throughput trade with no effect on the dumped Top-K. Left
+    # unset (default), the batch size is exactly the checkpoint's, so the
+    # validated 20-deep dumps are reproduced bit-for-bit.
+    if eval_batch_size is not None:
+        cfg.data.datamodule.valid_batch_size = int(eval_batch_size)
     ray_datasets = hydra.utils.instantiate(cfg.data.ray_datasets, paths=cfg.paths)
     datamodule = hydra.utils.instantiate(cfg.data.datamodule, ray_datasets=ray_datasets)
     datamodule.setup(stage="test")
@@ -236,6 +245,11 @@ def main() -> int:
                         help="also store per-candidate model scores: MARIUS joint "
                              "log-probs (scoring.score_marius_tuples), SASRec logits "
                              "(scoring.score_sasrec_topk), as float32[U, N] 'scores'")
+    parser.add_argument("--eval-batch-size", type=int, default=None,
+                        help="override the test dataloader batch size (datamodule "
+                             "valid_batch_size). Needed for wide beams: --n-results "
+                             "100 OOMs at the checkpoint's batch 256 on a 40GB A100; "
+                             "32-64 fits. Unset reproduces the validated dumps exactly.")
     parser.add_argument("--smoke", action="store_true", help="only a few batches, to validate shapes cheaply")
     args = parser.parse_args()
 
@@ -271,7 +285,8 @@ def main() -> int:
 
         topk, target, hist_len, scores = run_topk(
             cfg, ckpt_path, mode=mode, limit_batches=limit,
-            n_results=args.n_results, with_scores=args.with_scores)
+            n_results=args.n_results, with_scores=args.with_scores,
+            eval_batch_size=args.eval_batch_size)
         out_dir.mkdir(parents=True, exist_ok=True)
         suffix = "" if args.n_results == K else str(args.n_results)
         npz = out_dir / f"{method}_seed{args.seed}_topk{suffix}.npz"
