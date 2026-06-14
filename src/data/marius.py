@@ -27,6 +27,7 @@ class MARIUSPrePro:
         crop_length,
         augment,
         random_crop=True,
+        seed=None,
         **kwargs,
     ):
         self.split = split
@@ -39,6 +40,7 @@ class MARIUSPrePro:
             augment=augment,
             random_crop=random_crop,
             split=split,
+            seed=seed,
         )
 
         self.quant_df = ray.get(quantizer_ref)

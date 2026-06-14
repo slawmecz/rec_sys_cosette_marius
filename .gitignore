@@ -20,6 +20,7 @@ __pycache__/
 
 # logs and env
 *.log
+jobs/arts2023/logs/*.out
 .env
 jobs/wandb.env
 .DS_Store

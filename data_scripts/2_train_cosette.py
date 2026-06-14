@@ -14,6 +14,7 @@ import ray
 import torch
 import wandb
 from omegaconf import OmegaConf
+from pytorch_lightning import seed_everything
 from torch import optim
 from torch.optim.lr_scheduler import LRScheduler
 from tqdm import tqdm
@@ -305,8 +306,19 @@ class _Dataset(torch.utils.data.IterableDataset):
         }
 
 
+def _seed_dataloader_worker(base_seed):
+    # Reproducibility (documented deviation): seed numpy/python global RNGs in each
+    # DataLoader worker process (the timeline permutation and random crop run there).
+    def _init(worker_id):
+        s = (base_seed + worker_id) % (2**32)
+        np.random.seed(s)
+        random.seed(s)
+
+    return _init
+
+
 class DataLoader:
-    def __init__(self, items, timelines, bs, cut):
+    def __init__(self, items, timelines, bs, cut, seed=None):
         self.timelines = timelines
         self.items_to_row = {item: i for i, item in enumerate(items)}
 
@@ -321,6 +333,7 @@ class DataLoader:
             persistent_workers=True,
             pin_memory=True,
             in_order=False,
+            worker_init_fn=(None if seed is None else _seed_dataloader_worker(seed)),
         )
 
     def _collate_fn(self, batch):  # No batching, already done by the workers
@@ -389,6 +402,11 @@ def make_name(config):
 def make_cosette_embs(config):
     config.ckpt_dir = os.path.join(config.ckpt_dir, uuid4().hex)
 
+    # Reproducibility (documented deviation): seed torch (model init + reconstruction
+    # draw), numpy and python RNGs in this GPU worker process. The DataLoader worker
+    # processes are seeded separately via worker_init_fn; k-means via kmeans_seed.
+    seed_everything(int(config.get("seed", 42)), workers=True)
+
     # Input paths
     embeddings_path = config.paths.embeddings_tplt.format(
         emb_method=config.data.emb_method, category=config.data.category
@@ -420,6 +438,7 @@ def make_cosette_embs(config):
         timelines=train_timelines,
         bs=config.optim.batch_size,
         cut=config.loss.sequence_length,
+        seed=int(config.get("seed", 42)),
     )
 
     model = COSETTE(
@@ -444,6 +463,7 @@ def make_cosette_embs(config):
         kmeans_iters=config.centroids.kmeans_iters,
         sk_epsilons=config.centroids.sk_epsilons,
         sk_iters=config.centroids.sk_iters,
+        kmeans_seed=int(config.get("seed", 42)),
     )
 
     print("Model : ", model)
