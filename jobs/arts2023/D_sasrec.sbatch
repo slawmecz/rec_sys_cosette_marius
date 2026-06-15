@@ -5,7 +5,7 @@
 #SBATCH --gpus=2
 #SBATCH --cpus-per-task=32
 #SBATCH --time=10:00:00
-#SBATCH --array=42-46
+#SBATCH --array=42,44,46,48,50
 #SBATCH --output=/gpfs/home2/scur1250/rec_sys_cosette_marius/jobs/arts2023/logs/%x_%A_%a.out
 #
 # PHASE D (per-seed, 2 GPUs). SASRec++ baseline (dense, no COSETTE) -> test.
@@ -19,9 +19,15 @@ echo "[D] SASRec++ seed=${SEED} | GPUs visible: $(nvidia-smi -L | wc -l)"
 
 # REPRODUCTION OVERRIDES (reference recipe; committed defaults left intact):
 #   num_workers=2 (effective batch 512), max_steps=81000, limit_val_batches=1000
+# BUGFIX: configs/experiment/sasrec.yaml hardcodes vocab_size=89959, but item token
+#   ids run 2..89959 (= num_items 89958 + len(SpecialTokens)=2 offset), so the last
+#   item (token 89959) overflowed the 89959-row embedding -> CUDA indexSelectLargeIndex
+#   device-side assert ("srcIndex < srcSelectDimSize"). Correct size = N + #special =
+#   89958 + 2 = 89960 (same convention as MARIUS vocab_size=1026 = 4*256 + 2).
 python src/train.py experiment=sasrec \
   seed="${SEED}" \
   data.ray_datasets.category="${CATEGORY}" \
+  model.net.vocab_size=89960 \
   ray.scaling_config.num_workers=2 \
   trainer.max_steps=81000 \
   trainer.limit_val_batches=1000 \

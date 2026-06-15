@@ -5,7 +5,7 @@
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=16
 #SBATCH --time=18:00:00
-#SBATCH --array=42-46
+#SBATCH --array=42,44,46,48,50
 #SBATCH --output=/gpfs/home2/scur1250/rec_sys_cosette_marius/jobs/arts2023/logs/%x_%A_%a.out
 #
 # PHASE B (per-seed, 1 GPU each). Trains one COSETTE tokenizer per seed so each of the

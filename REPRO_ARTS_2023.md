@@ -117,6 +117,17 @@ Dataset: 197,286 users / 89,958 items.
 4. **`model_folder` / `ckpt_dir` / `paths.root` overrides** replace the original author's
    hardcoded machine paths. No method impact.
 
+5. **SASRec `vocab_size` off-by-one bugfix** (`model.net.vocab_size=89960` override in
+   `D_sasrec.sbatch`). `configs/experiment/sasrec.yaml` hardcodes `vocab_size: 89959`,
+   but `src/data/ray_data.get_items_map` assigns item token ids `idx + len(SpecialTokens)`
+   (PAD=0, BOS=1 → offset 2), so Arts's 89,958 items occupy tokens **2..89959** and the
+   embedding needs **89,960** rows (= `num_items + len(SpecialTokens)`, the same convention
+   as MARIUS `vocab_size=1026 = 4*256 + 2`). With 89959 the last item overflows the table →
+   CUDA `indexSelectLargeIndex: srcIndex < srcSelectDimSize` device-side assert (the run
+   aborts ~2 min in). The committed config is left intact; the fix is applied as a per-run
+   override. This is a correctness fix, not a method change — it makes the full SASRec run
+   complete (a short smoke happened to dodge the one overflowing item).
+
 ---
 
 ## 5. Run plan
@@ -127,8 +138,8 @@ Phases (see [`jobs/arts2023/README.md`](jobs/arts2023/README.md) for commands):
 - **A1** download (login) → **A2** parquet (CPU) → **A3** embeddings (GPU×2). Run **once**.
 - **Smoke** `smoke_sasrec` (GPU×2, 600 steps) — confirm env/Ray/data/DDP + steps-per-epoch.
 - **First full seed** — run B(42) → C(42) and D(42), inspect logs, *then* fan out.
-- **B** COSETTE array 42–46 (GPU×1 each) → **C** collisions+MARIUS array 42–46 (GPU×2 each).
-- **D** SASRec++ array 42–46 (GPU×2 each) — independent of B/C, run in parallel.
+- **B** COSETTE array 42,44,46,48,50 (GPU×1 each) → **C** collisions+MARIUS array 42,44,46,48,50 (GPU×2 each).
+- **D** SASRec++ array 42,44,46,48,50 (GPU×2 each) — independent of B/C, run in parallel.
 - **E** `aggregate_arts.py` — mean ± std vs paper.
 
 Dependencies: C(seed) needs B(seed) (`runs/seed_<seed>.quant`). Chain with

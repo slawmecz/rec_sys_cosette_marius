@@ -5,7 +5,7 @@
 #SBATCH --gpus=2
 #SBATCH --cpus-per-task=32
 #SBATCH --time=16:00:00
-#SBATCH --array=42-46
+#SBATCH --array=42,44,46,48,50
 #SBATCH --output=/gpfs/home2/scur1250/rec_sys_cosette_marius/jobs/arts2023/logs/%x_%A_%a.out
 #
 # PHASE C (per-seed, 2 GPUs). Collision removal -> MARIUS (full model) -> test.
