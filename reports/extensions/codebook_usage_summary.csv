@@ -1,0 +1,5 @@
+category,variant,parquet,n_items,unique_full_sids,collision_rate,max_items_per_sid,mean_items_per_sid,sid_entropy,mean_level_usage_ratio,mean_level_perplexity,mean_level_top1_load
+Beauty,before_col,/home/scur1266/scratch/cosette_marius/data/data/embeddings/sentence-t5-xl/Beauty/COSETTE_128d_256x4_f958.parquet,12101,11922,0.014792165936699408,14.0,1.0150142593524576,9.371404670011424,1.0,241.1355512807869,0.019151309809106686
+Beauty,after_col,/home/scur1266/scratch/cosette_marius/data/data/embeddings/sentence-t5-xl/Beauty/COSETTE_128d_256x4_f958-col.parquet,12101,12101,0.0,1.0,1.0,9.40104337279805,1.0,242.24984153084506,0.016486240806544913
+Sports_and_Outdoors,before_col,/home/scur1266/scratch/cosette_marius/data/data/embeddings/sentence-t5-xl/Sports_and_Outdoors/COSETTE_128d_256x4_8ed1.parquet,18357,18243,0.006210165059650219,14.0,1.0062489722085184,9.807800362707457,1.0,245.38533769405547,0.011126545731873402
+Sports_and_Outdoors,after_col,/home/scur1266/scratch/cosette_marius/data/data/embeddings/sentence-t5-xl/Sports_and_Outdoors/COSETTE_128d_256x4_8ed1-col.parquet,18357,18357,0.0,1.0,1.0,9.817766252130653,1.0,245.39999737060015,0.011126545731873402
