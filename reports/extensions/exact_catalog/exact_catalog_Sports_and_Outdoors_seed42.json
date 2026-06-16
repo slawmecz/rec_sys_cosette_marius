@@ -1,0 +1,38 @@
+{
+  "category": "Sports_and_Outdoors",
+  "seed": 42,
+  "n_users": 1000,
+  "n_targets_in_catalog": 1000,
+  "per_k": [
+    {
+      "k": 5,
+      "recall_exact": 0.027,
+      "recall_beam": 0.032,
+      "coverage_exact": 0.08743,
+      "coverage_beam": 0.09027
+    },
+    {
+      "k": 10,
+      "recall_exact": 0.046,
+      "recall_beam": 0.049,
+      "coverage_exact": 0.14719,
+      "coverage_beam": 0.14975
+    },
+    {
+      "k": 20,
+      "recall_exact": 0.073,
+      "recall_beam": 0.078,
+      "coverage_exact": 0.23898,
+      "coverage_beam": 0.24356
+    }
+  ],
+  "target_exact_rank_median_all": 1000.5,
+  "beam_missed_targets": 922,
+  "beam_missed_target_exact_rank_median": 1328.5,
+  "beam_missed_pct_exact_rank_le_10": 0.0,
+  "beam_missed_pct_exact_rank_le_20": 0.0,
+  "beam_missed_pct_exact_rank_le_100": 0.11713665943600868,
+  "delta_recall@10_exact_minus_beam": -0.003,
+  "delta_coverage@10_points": -0.256,
+  "verdict": "MODEL-bound"
+}
