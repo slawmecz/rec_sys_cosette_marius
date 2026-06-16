@@ -52,10 +52,13 @@ for S in ${SEEDS}; do
     --results-dir "${OUTPUT_ROOT}/results" --out-dir "${OUT_TOPK}"
 done
 DUMP_ROOT="$(dirname "${OUT_TOPK}")"
+# Write to isolated paths so the committed baseline CSVs are never overwritten.
 "${PYTHON_BIN}" scripts/extensions/compute_beyond_accuracy.py \
-  --dump-root "${DUMP_ROOT}" --category Beauty --models marius --seeds "${SEEDS}" --ks "10 20"
+  --dump-root "${DUMP_ROOT}" --category Beauty --models marius --seeds "${SEEDS}" --ks "10 20" \
+  --out "${DUMP_ROOT}/beyond_accuracy_Beauty_logitadj.csv"
 "${PYTHON_BIN}" scripts/extensions/reach_estimator.py \
-  --dump-root "${DUMP_ROOT}" --category Beauty --models marius --seeds "${SEEDS}" --ks "10 20"
+  --dump-root "${DUMP_ROOT}" --category Beauty --models marius --seeds "${SEEDS}" --ks "10 20" \
+  --out-dir "${DUMP_ROOT}/reach_estimator"
 
 echo "=== results table (logit-adjusted MARIUS, Beauty) ==="
 cat "${OUTPUT_ROOT}/results/table5_beauty_marius_5seed_summary_full_latest.txt" 2>/dev/null || true
