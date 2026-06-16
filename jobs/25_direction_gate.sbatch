@@ -34,7 +34,7 @@ for CAT in Sports_and_Outdoors Beauty; do
   echo "=== ${CAT}: timelines=${TIMELINES} items=${ITEMS} ==="
   "${PYTHON_BIN}" scripts/extensions/direction_gate.py \
     --category "${CAT}" --timelines "${TIMELINES}" --items "${ITEMS}" \
-    --dim "${SVD_DIM:-32}" --groups "${GROUPS:-256}" --seed "${SEED}"
+    --dim "${SVD_DIM:-32}" --groups "${N_GROUPS:-256}" --seed "${SEED}"
 done
 
 echo "Direction-gate artifacts:"
