@@ -30,6 +30,8 @@ CHUNK_SIZE="${CHUNK_SIZE:-1024}"
 EVAL_BATCH_SIZE="${EVAL_BATCH_SIZE:-32}"
 BEAM_K="${BEAM_K:-20}"
 [[ "${SMOKE:-0}" == "1" ]] && MAX_USERS=64 && EVAL_BATCH_SIZE=16
+FILTER_FLAG=""
+[[ "${FILTER_SEEN:-0}" == "1" ]] && FILTER_FLAG="--filter-seen"
 
 "${PYTHON_BIN}" scripts/extensions/exact_catalog.py run \
   --category Sports_and_Outdoors \
@@ -41,10 +43,10 @@ BEAM_K="${BEAM_K:-20}"
   --max-users "${MAX_USERS}" \
   --chunk-size "${CHUNK_SIZE}" \
   --eval-batch-size "${EVAL_BATCH_SIZE}" \
-  --beam-k "${BEAM_K}"
+  --beam-k "${BEAM_K}" ${FILTER_FLAG}
 
 "${PYTHON_BIN}" scripts/extensions/exact_catalog.py analyze \
-  --category Sports_and_Outdoors --seed "${SEED}"
+  --category Sports_and_Outdoors --seed "${SEED}" ${FILTER_FLAG}
 
 echo "Exact-catalog artifacts:"
 ls -la "${PROJECT_ROOT}/reports/extensions/exact_catalog/" || true

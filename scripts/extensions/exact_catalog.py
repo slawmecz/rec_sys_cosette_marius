@@ -220,11 +220,19 @@ def run_stage(args) -> int:
             hist_len = valid.sum(dim=1)
 
             scores_np = scores.detach().cpu().numpy()
+            inp_np = inp.detach().cpu().numpy()
             tgt_np = tgt.detach().cpu().numpy()
             B = scores_np.shape[0]
             for b in range(B):
                 if args.max_users is not None and state["n"] >= args.max_users:
                     break
+                if args.filter_seen:
+                    # Mirror search()'s filter_preds: drop the user's history items
+                    # so exact-vs-beam is apples-to-apples (the beam masks seen items).
+                    seen = {tuple_to_item_idx(inp_np[b, t], t2i, Lc) for t in range(inp_np.shape[1])}
+                    seen.discard(HALLUCINATION)
+                    if seen:
+                        scores_np[b, list(seen)] = -np.inf
                 target_idx = tuple_to_item_idx(tgt_np[b], t2i, Lc)
                 top, rank = topk_and_target_rank(scores_np[b], target_idx, args.topk_store)
                 buf["exact_top"].append(top.astype(np.int32))
@@ -252,7 +260,8 @@ def run_stage(args) -> int:
 
     out_dir = args.out_dir or DEFAULT_OUT_ROOT
     out_dir.mkdir(parents=True, exist_ok=True)
-    npz = out_dir / f"exact_catalog_{args.category}_seed{args.seed}.npz"
+    suffix = "_filtered" if args.filter_seen else ""
+    npz = out_dir / f"exact_catalog_{args.category}_seed{args.seed}{suffix}.npz"
     np.savez_compressed(
         npz,
         exact_top=np.stack(buf["exact_top"]),                  # n x topk_store (catalog idx)
@@ -280,7 +289,8 @@ def analyze_stage(args) -> int:
     Lc = meta["L"]
     n_catalog = meta["n_catalog"]
     out_dir = args.out_dir or DEFAULT_OUT_ROOT
-    npz = np.load(out_dir / f"exact_catalog_{args.category}_seed{args.seed}.npz")
+    suffix = "_filtered" if args.filter_seen else ""
+    npz = np.load(out_dir / f"exact_catalog_{args.category}_seed{args.seed}{suffix}.npz")
 
     exact_top = npz["exact_top"]                  # n x S (catalog idx)
     target_exact_rank = npz["target_exact_rank"]  # n
@@ -335,8 +345,8 @@ def analyze_stage(args) -> int:
         return float((ranks <= r).mean()) if ranks.size else float("nan")
 
     summary = {
-        "category": args.category, "seed": args.seed, "n_users": int(n),
-        "n_targets_in_catalog": int(in_cat.sum()),
+        "category": args.category, "seed": args.seed, "filter_seen": bool(args.filter_seen),
+        "n_users": int(n), "n_targets_in_catalog": int(in_cat.sum()),
         "per_k": rows,
         "target_exact_rank_median_all": float(np.median(valid_ranks)) if valid_ranks.size else None,
         "beam_missed_targets": int(miss.sum()),
@@ -356,7 +366,7 @@ def analyze_stage(args) -> int:
         summary["verdict"] = "SEARCH-bound" if (d_recall >= 0.01 and d_cov >= 5.0) else "MODEL-bound"
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / f"exact_catalog_{args.category}_seed{args.seed}.json").write_text(json.dumps(summary, indent=2))
+    (out_dir / f"exact_catalog_{args.category}_seed{args.seed}{suffix}.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2), flush=True)
     return 0
 
@@ -400,6 +410,10 @@ def main() -> int:
     common.add_argument("--seed", type=int, default=42)
     common.add_argument("--dump-root", type=Path, default=DEFAULT_DUMP_ROOT)
     common.add_argument("--out-dir", type=Path, default=None)
+    common.add_argument("--filter-seen", action="store_true",
+                        help="mask the user's history items before ranking (mirrors "
+                             "search() filter_preds), for an apples-to-apples exact-vs-beam "
+                             "comparison; writes/reads a _filtered artifact")
 
     pr = sub.add_parser("run", parents=[common], help="GPU: score the catalog and dump")
     pr.add_argument("--category-slug", required=True)
