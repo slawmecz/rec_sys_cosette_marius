@@ -1,0 +1,65 @@
+{
+  "category": "Sports_and_Outdoors",
+  "n_catalog": 18357,
+  "n_transitions": 189543,
+  "svd_dim": 32,
+  "n_groups_G": 256,
+  "seed": 42,
+  "unreached_seeds_used": [
+    42,
+    43,
+    44
+  ],
+  "n_unreached_next_transitions": 40720,
+  "metric_a_all_transitions": {
+    "cosette_l1": {
+      "mi": 2.92546,
+      "frac_of_H_next": 0.31771,
+      "n_groups": 256
+    },
+    "direction": {
+      "mi": 2.61335,
+      "frac_of_H_next": 0.28382,
+      "n_groups": 256
+    },
+    "symmetric": {
+      "mi": 2.74613,
+      "frac_of_H_next": 0.29824,
+      "n_groups": 256
+    },
+    "random": {
+      "mi": 2.72249,
+      "frac_of_H_next": 0.29567,
+      "n_groups": 256
+    },
+    "_H_next": 9.20784,
+    "_n_transitions": 189543
+  },
+  "metric_b_unreached_next": {
+    "cosette_l1": {
+      "mi": 3.8659,
+      "frac_of_H_next": 0.43139,
+      "n_groups": 256
+    },
+    "direction": {
+      "mi": 3.37738,
+      "frac_of_H_next": 0.37687,
+      "n_groups": 256
+    },
+    "symmetric": {
+      "mi": 3.61649,
+      "frac_of_H_next": 0.40356,
+      "n_groups": 256
+    },
+    "random": {
+      "mi": 3.88989,
+      "frac_of_H_next": 0.43406,
+      "n_groups": 256
+    },
+    "_H_next": 8.96154,
+    "_n_transitions": 40720
+  },
+  "delta_dir_minus_cosette": -0.03389,
+  "ratio_dir_over_symmetric": 0.9516,
+  "verdict": "SHELVE (controlled null)"
+}
