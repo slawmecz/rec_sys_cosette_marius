@@ -23,16 +23,21 @@
 #   sbatch --export=ALL,LOGITADJ_SEEDS="42" jobs/26_logitadj_sports.sbatch   # quick 1-seed
 
 set -uo pipefail
+
+# Set the FRESH OUTPUT_ROOT *before* sourcing env so env_common builds
+# PATHS_OVERRIDES (paths.model_folder_tplt) against it. Otherwise checkpoints are
+# written into the baseline models dir and find_run_for_seed / dump_topk miss them
+# (env_common honors a pre-set OUTPUT_ROOT; this is the documented marius_fuse pattern).
+TAU="${TAU:-1.0}"
+export OUTPUT_ROOT="${OUTPUT_ROOT_LOGITADJ:-${SCRATCH:-${HOME}/scratch}/cosette_marius/outputs_logitadj_sports_tau${TAU}}"
 source "${SLURM_SUBMIT_DIR:-$(pwd)}/jobs/env_sports.sh"
 cd "${PROJECT_ROOT}"
 
-TAU="${TAU:-1.0}"
 SEEDS="${LOGITADJ_SEEDS:-42 43}"
-QUANT_ID="${QUANT_ID:-COSETTE_128d_256x4_8ed1-col}"
+# Tokenizer (-col) id this account's baseline was trained on; the committed prior
+# already matches it. Override QUANT_ID if your -col parquet has a different suffix.
+QUANT_ID="${QUANT_ID:-COSETTE_128d_256x4_24cd-col}"
 PRIOR="${PROJECT_ROOT}/reports/extensions/logitadj/prior_Sports_and_Outdoors.npy"
-
-# Fresh OUTPUT_ROOT so the harness trains (does not record the baseline).
-export OUTPUT_ROOT="${OUTPUT_ROOT_LOGITADJ:-${SCRATCH:-${HOME}/scratch}/cosette_marius/outputs_logitadj_sports_tau${TAU}}"
 mkdir -p "${OUTPUT_ROOT}/logs" "${OUTPUT_ROOT}/results"
 export EXTRA_TRAIN_OVERRIDES="model.net._target_=src.models.marius_logitadj.MARIUSLogitAdj +model.net.logit_adj_tau=${TAU} +model.net.logit_adj_prior_path=${PRIOR}"
 
