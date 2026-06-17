@@ -29,7 +29,16 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
+import numpy as np
+import pandas as pd
+
 from scripts.extensions.scoring import score_marius_tuples, score_marius_tuples_train
+from scripts.extensions.distill_utils import (
+    build_item_to_codes,
+    build_item_to_codes_np,
+    make_candidates,
+    make_candidates_np,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -93,8 +102,48 @@ def check_numeric() -> None:
     print("  (ii) gradient through depth_emb: PASS")
 
 
+def check_distill_utils_torch() -> None:
+    """Verify that the torch wrappers agree with the numpy cores."""
+    # --- build_item_to_codes ---
+    quant_df = pd.DataFrame(
+        {"L0": [0, 3], "L1": [5, 10], "L2": [0, 127], "L3": [255, 0]},
+        index=["pA", "pB"],
+    )
+    quant_df.index.name = "product_id"
+    items = ["pA", "pB"]
+
+    torch_result = build_item_to_codes(quant_df, items)
+    np_result = build_item_to_codes_np(quant_df, items)
+    assert torch.equal(torch_result, torch.from_numpy(np_result)), (
+        "build_item_to_codes torch vs numpy mismatch"
+    )
+    print("  (iii) build_item_to_codes torch==numpy: PASS")
+
+    # --- make_candidates ---
+    torch.manual_seed(0)
+    B, n_catalog, n_cand = 4, 10, 5
+    scores_t = torch.randn(B, n_catalog)
+    target_t = torch.randint(0, n_catalog, (B,))
+
+    torch_cands = make_candidates(scores_t, target_t, n_cand)
+    np_cands = make_candidates_np(
+        scores_t.numpy().astype("float32"),
+        target_t.numpy().astype("int64"),
+        n_cand,
+    )
+    assert torch.equal(torch_cands, torch.from_numpy(np_cands)), (
+        "make_candidates torch vs numpy mismatch"
+    )
+    # Column 0 must equal the true target for every row.
+    assert torch.equal(torch_cands[:, 0], target_t.to(torch.int64)), (
+        "make_candidates: column 0 does not match target"
+    )
+    print("  (iv) make_candidates torch==numpy + col0==target: PASS")
+
+
 def main() -> int:
     check_numeric()
+    check_distill_utils_torch()
     print("OK: distill_torch_check passed.")
     return 0
 
