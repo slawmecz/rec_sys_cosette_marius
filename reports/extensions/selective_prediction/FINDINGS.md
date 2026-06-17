@@ -18,6 +18,12 @@ that confidence and abstaining on the low-confidence tail gives a steep selectiv
 
 (Selective-NDCG@10 follows the same monotone shape; see `<cat>_summary.json`.)
 
+NOTE on the denominator: "base Hit@10" here (Beauty 0.0850, Sports 0.0464) is the model's
+catalog-reach-collapsed top-10 output on these dumps (consistent with the depth-20 dumps,
+0.0848 / 0.0463). It is the honest, conservative denominator for the selective story and is
+NOT the paper-metric R@10 reported in REPLICATION_REPORT.md; do not conflate the two in the
+writeup.
+
 This is a capability the discriminative SASRec++ baseline does not provide by construction:
 its dot-product score is unnormalized and is not a per-user reliability scale. It turns the
 reproduction context "MARIUS underperforms SASRec on raw Beauty recall" into an asset:
@@ -32,8 +38,12 @@ human-handoff or fallback on the low-confidence tail.
    history-length bucket (cold <=5, mid, warm >=16); see the `within_history_bucket` block.
 3. NOT a popularity proxy (the key check): corr(confidence, log target-popularity) = 0.038
    (Beauty) / -0.056 (Sports), and the selective lift on TAIL targets EXCEEDS the lift on
-   HEAD targets (Beauty 3.61x tail vs 2.46x head; Sports 5.52x vs 2.23x). So this is not a
-   restatement of the popularity/catalog-collapse story.
+   HEAD targets (Beauty 3.61x tail vs 2.46x head; Sports 5.52x vs 2.23x). Absolute
+   selective-Hit@10 at 10% coverage (base -> selective): Beauty tail 0.033 -> 0.119, head
+   0.136 -> 0.335; Sports tail 0.008 -> 0.046, head 0.084 -> 0.188. Caveat: the tail RATIO is
+   amplified by a small tail base (esp. Sports tail base 0.008), so report the absolutes too;
+   the point stands either way -- confidence helps tail targets at least as much as head, so
+   this is not a restatement of the popularity/catalog-collapse story.
 4. The top-1 log-prob beats the margin (top1 - top2) signal at every coverage.
 
 ## Honest bounds (do not oversell)
