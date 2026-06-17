@@ -102,9 +102,10 @@ def make_candidates_np(
     Returns
     -------
     np.ndarray with dtype int64, shape (B, n_cand).
-    Column 0 = true item; columns 1..n_cand-1 = top teacher items (may
-    include the true item again if it appears among the top scores, but it
-    will NOT appear in col 0 twice -- col 0 is always the forced true item).
+    Column 0 = true item; columns 1..n_cand-1 = the teacher's top items
+    other than the true item.  The true item appears exactly once per row
+    (in col 0): the swap path moves it out of its original top-n slot, and
+    the replace path only triggers when it was not in the top-n at all.
     """
     B, n_catalog = scores_2d.shape
     result = np.empty((B, n_cand), dtype=np.int64)
@@ -125,10 +126,9 @@ def make_candidates_np(
             # Swap true item to position 0.
             row[0], row[idx] = row[idx], row[0]
         else:
-            # Replace last slot with true item; put it at position 0.
-            row[-1] = true_item
-            # Now rotate: true item is at the end, move to front.
-            row = [true_item] + [x for x in row[:-1]]
+            # True item is not in the top-n list.  Drop the lowest-scoring
+            # candidate (last position) and put the true item at col 0.
+            row = [true_item] + top_n[b, :-1].tolist()
 
         result[b] = row
 
