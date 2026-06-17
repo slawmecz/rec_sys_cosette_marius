@@ -37,6 +37,7 @@ lightning_logs/
 # beyond-accuracy Top-K dumps: keep the small support tables + Top-K npz, but not
 # the large per-item content embeddings (ILD is already captured in the CSVs).
 reports/extensions/topk/**/embeddings.npy
+reports/extensions/topk_logitadj_*/**/embeddings.npy
 
 # AI assistant artifacts and local working notes (local only, never pushed)
 CLAUDE.md
