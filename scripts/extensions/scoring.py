@@ -25,9 +25,12 @@ import torch
 import torch.nn.functional as F
 
 
-@torch.no_grad()
-def score_marius_tuples(net, batch_input, code_tokens):
+def _score_marius_tuples_impl(net, batch_input, code_tokens):
     """Joint log-probability of given TOKEN-space code tuples under MARIUS.
+
+    Core computation shared by score_marius_tuples (no_grad, eval) and
+    score_marius_tuples_train (grad-enabled, training). Do not call directly;
+    use one of those two entry points.
 
     Teacher-forces the depth decoder on each candidate tuple, conditioned on
     the last temporal position of the user's history, replicating exactly the
@@ -35,7 +38,7 @@ def score_marius_tuples(net, batch_input, code_tokens):
     levels of log_softmax of the emitted token).
 
     Args:
-      net:         the MARIUS module (eval mode; caller handles autocast).
+      net:         the MARIUS module (caller handles autocast and grad mode).
       batch_input: int64[B, T, L] left-padded history in TOKEN space (the
                    "input" tensor of a MARIUS eval batch).
       code_tokens: int64[B, C, L] candidate code tuples in TOKEN space, i.e.
@@ -69,6 +72,30 @@ def score_marius_tuples(net, batch_input, code_tokens):
     log_probs = F.log_softmax(logits.float(), dim=-1)
     tok_lp = log_probs.gather(2, flat[:, :, None]).squeeze(-1)  # B*C x L
     return tok_lp.sum(dim=-1).view(B, C).float()
+
+
+@torch.no_grad()
+def score_marius_tuples(net, batch_input, code_tokens):
+    """Eval entry point: no_grad wrapper around _score_marius_tuples_impl.
+
+    Behavior is byte-identical to the original implementation.  See
+    _score_marius_tuples_impl for the full docstring.
+    """
+    return _score_marius_tuples_impl(net, batch_input, code_tokens)
+
+
+def score_marius_tuples_train(net, batch_input, code_tokens):
+    """Grad-enabled entry point: delegates to _score_marius_tuples_impl.
+
+    Identical computation to score_marius_tuples but runs with gradient
+    tracking so that a KL distillation loss can backprop into the depth
+    decoder.  The caller is responsible for placing net in training mode and
+    opening the appropriate autocast context.
+
+    Returns float32[B, C] log-probabilities (same semantics as
+    score_marius_tuples).
+    """
+    return _score_marius_tuples_impl(net, batch_input, code_tokens)
 
 
 @torch.no_grad()
