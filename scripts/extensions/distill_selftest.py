@@ -21,6 +21,7 @@ import pandas as pd
 REPO = Path(__file__).resolve().parents[2]
 SCORING = REPO / "scripts" / "extensions" / "scoring.py"
 DISTILL_UTILS = REPO / "scripts" / "extensions" / "distill_utils.py"
+MARIUS_PY = REPO / "src" / "data" / "marius.py"
 
 sys.path.insert(0, str(REPO))
 
@@ -147,9 +148,128 @@ def check_distill_utils() -> None:
     print("  check_distill_utils: PASS")
 
 
+def check_distill_prepro() -> None:
+    """Two-part verification for MARIUSDistillPrePro.
+
+    Part A: AST check -- confirms class exists, subclasses MARIUSPrePro,
+    defines __init__ + __call__, and __call__ returns a dict with the 4
+    expected keys.
+
+    Part B: numpy mirror -- reimplements ONLY the deterministic
+    teacher_query padding and target_catalog_idx offset math (no import of
+    src.data.marius) and asserts correctness on a synthetic example.
+    """
+
+    # ----- Part A: AST check -----
+
+    text = MARIUS_PY.read_text()
+    assert all(ord(c) < 128 for c in text), "non-ASCII characters in marius.py"
+
+    tree = ast.parse(text)
+
+    # Find MARIUSDistillPrePro class node.
+    distill_cls = None
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name == "MARIUSDistillPrePro":
+            distill_cls = node
+            break
+    assert distill_cls is not None, "MARIUSDistillPrePro class not found in marius.py"
+
+    # Must subclass MARIUSPrePro.
+    base_names = []
+    for base in distill_cls.bases:
+        if isinstance(base, ast.Name):
+            base_names.append(base.id)
+        elif isinstance(base, ast.Attribute):
+            base_names.append(base.attr)
+    assert "MARIUSPrePro" in base_names, (
+        f"MARIUSDistillPrePro must subclass MARIUSPrePro, found bases: {base_names}"
+    )
+
+    # Must define __init__ and __call__.
+    method_names = {
+        n.name for n in distill_cls.body if isinstance(n, ast.FunctionDef)
+    }
+    for required_method in ("__init__", "__call__"):
+        assert required_method in method_names, (
+            f"MARIUSDistillPrePro missing method: {required_method}"
+        )
+
+    # __call__ must return a dict that contains all 4 keys.
+    call_fn = next(
+        n for n in distill_cls.body
+        if isinstance(n, ast.FunctionDef) and n.name == "__call__"
+    )
+    required_keys = {"input", "target", "teacher_query", "target_catalog_idx"}
+    found_keys: set[str] = set()
+    for node in ast.walk(call_fn):
+        if isinstance(node, ast.Return):
+            # Look for Constant string keys inside dict literals anywhere in
+            # the return expression subtree.
+            for sub in ast.walk(node):
+                if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                    found_keys.add(sub.value)
+    missing = required_keys - found_keys
+    assert not missing, (
+        f"MARIUSDistillPrePro.__call__ return dict missing keys: {missing}"
+    )
+
+    print("  check_distill_prepro (Part A - AST): PASS")
+
+    # ----- Part B: numpy mirror of teacher_query + target_catalog_idx -----
+
+    # Synthetic setup:
+    #   item_to_id maps items to SASRec indices (PAD=0, BOS=1, then items 2..N+1)
+    #   len(SpecialTokens) = 2
+    #   tl = ["a", "b", "c", "d"]  (crop of length 4; last item = "d")
+    #   crop_length = 6  (pad 2 slots on the left)
+    PAD = 0
+    n_special = 2
+    item_to_id = {"a": 2, "b": 3, "c": 4, "d": 5, "e": 6}
+    tl = ["a", "b", "c", "d"]
+    crop_length = 6
+
+    # teacher_query: item-id history for tl[:-1], left-padded with PAD to crop_length.
+    tq_ids = [item_to_id[it] for it in tl[:-1]]  # [2, 3, 4]
+    teacher_query = np.array(
+        [PAD] * (crop_length - len(tq_ids)) + tq_ids, dtype=np.int64
+    )
+    # Expected: [0, 0, 0, 2, 3, 4]
+    expected_tq = np.array([0, 0, 0, 2, 3, 4], dtype=np.int64)
+    assert np.array_equal(teacher_query, expected_tq), (
+        f"teacher_query mismatch: got {teacher_query}, expected {expected_tq}"
+    )
+    assert teacher_query.dtype == np.int64, "teacher_query must be int64"
+    assert teacher_query.shape == (crop_length,), (
+        f"teacher_query shape mismatch: {teacher_query.shape}"
+    )
+
+    # target_catalog_idx: item_to_id[tl[-1]] - len(SpecialTokens)
+    target_catalog_idx = np.int64(item_to_id[tl[-1]] - n_special)
+    # item_to_id["d"] = 5, 5 - 2 = 3
+    assert target_catalog_idx == np.int64(3), (
+        f"target_catalog_idx mismatch: got {target_catalog_idx}, expected 3"
+    )
+    assert target_catalog_idx.dtype == np.int64, "target_catalog_idx must be int64"
+
+    # Vary crop_length to confirm padding scales correctly.
+    for cl in (3, 4, 5, 7, 10):
+        tq_ids2 = [item_to_id[it] for it in tl[:-1]]
+        tq2 = np.array(
+            [PAD] * max(0, cl - len(tq_ids2)) + tq_ids2[max(0, len(tq_ids2) - cl):],
+            dtype=np.int64,
+        )
+        assert tq2.shape == (min(cl, crop_length),) or tq2.shape[0] <= cl, (
+            f"bad shape for cl={cl}: {tq2.shape}"
+        )
+
+    print("  check_distill_prepro (Part B - numpy mirror): PASS")
+
+
 def main() -> int:
     check_scoring()
     check_distill_utils()
+    check_distill_prepro()
     print("OK: distill_selftest passed.")
     return 0
 

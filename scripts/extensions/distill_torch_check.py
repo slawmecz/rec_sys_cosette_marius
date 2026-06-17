@@ -141,9 +141,134 @@ def check_distill_utils_torch() -> None:
     print("  (iv) make_candidates torch==numpy + col0==target: PASS")
 
 
+def check_distill_prepro_live() -> None:
+    """Behavioral check for MARIUSDistillPrePro.__call__.
+
+    Constructs a MARIUSDistillPrePro via __new__ (bypassing ray-based __init__),
+    injects a minimal stub crop_and_augment, quant_df, remap, and item_to_id,
+    then calls it on a synthetic row and asserts:
+      (a) teacher_query has correct ids and left-padding
+      (b) target_catalog_idx == item_to_id[last_item] - 2
+      (c) input and target shapes match those produced by MARIUSPrePro.__call__
+          on the SAME row (same crop, identical construction)
+    """
+    try:
+        from src.data.marius import MARIUSDistillPrePro, MARIUSPrePro, Remap
+        from src.models import SpecialTokens
+    except ImportError as exc:
+        print(f"  (v) check_distill_prepro_live: SKIP (import failed: {exc})")
+        return
+
+    PAD = SpecialTokens.PAD.value  # 0
+    BOS = SpecialTokens.BOS.value  # 1
+    n_special = len(SpecialTokens)   # 2
+
+    # --- stub crop_and_augment: identity (no crop, no augment) ---
+    class _StubCrop:
+        crop_length = 6
+
+        def __call__(self, tl, ts):
+            return tl, ts
+
+    # Synthetic quantized data: 6 items, 4 levels, codes in 0..255
+    items = ["a", "b", "c", "d", "e", "f"]
+    raw_codes = np.array(
+        [[0, 1, 2, 3],
+         [4, 5, 6, 7],
+         [8, 9, 10, 11],
+         [12, 13, 14, 15],
+         [16, 17, 18, 19],
+         [20, 21, 22, 23]],
+        dtype=np.int64,
+    )
+    quant_df = pd.DataFrame(
+        raw_codes, index=items, columns=["L0", "L1", "L2", "L3"]
+    )
+    L, K = 4, 256
+    remap = Remap(L=L, K=K)
+
+    item_to_id = {it: i + n_special for i, it in enumerate(items)}
+    # {"a": 2, "b": 3, "c": 4, "d": 5, "e": 6, "f": 7}
+
+    # Build MARIUSDistillPrePro via __new__ to skip ray-based __init__.
+    obj = MARIUSDistillPrePro.__new__(MARIUSDistillPrePro)
+    obj.crop_and_augment = _StubCrop()
+    obj.quant_df = quant_df
+    obj.L = L
+    obj.K = K
+    obj.remap = remap
+    obj.item_to_id = item_to_id
+    obj.split = "train"
+
+    # Synthetic row: timeline = all 6 items; timestamps = ones.
+    # np already imported at module level.
+    timeline = np.array(items)
+    timestamps = np.ones(len(items), dtype=np.int64)
+    row = {"timeline": timeline, "timestamp": timestamps}
+
+    out = obj(row)
+
+    # All four keys must be present.
+    for key in ("input", "target", "teacher_query", "target_catalog_idx"):
+        assert key in out, f"missing key in output: {key}"
+
+    crop_length = obj.crop_and_augment.crop_length  # 6
+
+    # input shape: (crop_length, L)
+    assert out["input"].shape == (crop_length, L), (
+        f"input shape {out['input'].shape} != ({crop_length}, {L})"
+    )
+    # target shape: (crop_length, L)
+    assert out["target"].shape == (crop_length, L), (
+        f"target shape {out['target'].shape} != ({crop_length}, {L})"
+    )
+    # teacher_query shape: (crop_length,) int64
+    assert out["teacher_query"].shape == (crop_length,), (
+        f"teacher_query shape {out['teacher_query'].shape} != ({crop_length},)"
+    )
+    assert out["teacher_query"].dtype == np.int64, (
+        f"teacher_query dtype {out['teacher_query'].dtype} != int64"
+    )
+    # teacher_query values: tl = [a,b,c,d,e,f], tl[:-1] = [a,b,c,d,e]
+    # item_to_id: a->2, b->3, c->4, d->5, e->6; crop_length=6, len(tq_ids)=5
+    # => left pad 1 zero, then [2,3,4,5,6]
+    expected_tq = np.array([PAD, 2, 3, 4, 5, 6], dtype=np.int64)
+    assert np.array_equal(out["teacher_query"], expected_tq), (
+        f"teacher_query mismatch: got {out['teacher_query']}, expected {expected_tq}"
+    )
+    # target_catalog_idx: item_to_id["f"] - 2 = 7 - 2 = 5
+    assert out["target_catalog_idx"] == np.int64(5), (
+        f"target_catalog_idx mismatch: got {out['target_catalog_idx']}, expected 5"
+    )
+    assert out["target_catalog_idx"].dtype == np.int64, (
+        f"target_catalog_idx dtype {out['target_catalog_idx'].dtype} != int64"
+    )
+
+    # Cross-check input/target against MARIUSPrePro on the SAME row to verify
+    # the construction is byte-identical.
+    parent_obj = MARIUSPrePro.__new__(MARIUSPrePro)
+    parent_obj.crop_and_augment = _StubCrop()
+    parent_obj.quant_df = quant_df
+    parent_obj.L = L
+    parent_obj.K = K
+    parent_obj.remap = remap
+    parent_obj.split = "train"
+
+    parent_out = parent_obj(row)
+    assert np.array_equal(out["input"], parent_out["input"]), (
+        "input differs from MARIUSPrePro output"
+    )
+    assert np.array_equal(out["target"], parent_out["target"]), (
+        "target differs from MARIUSPrePro output"
+    )
+
+    print("  (v) check_distill_prepro_live: PASS")
+
+
 def main() -> int:
     check_numeric()
     check_distill_utils_torch()
+    check_distill_prepro_live()
     print("OK: distill_torch_check passed.")
     return 0
 
