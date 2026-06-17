@@ -149,7 +149,7 @@ class MARIUSDistill(MARIUS):
             pathlib.Path(teacher_models_root), teacher_run_dir
         )
         teacher = hydra.utils.instantiate(cfg.model.net)
-        sd = torch.load(ckpt_path, map_location="cpu")["state_dict"]
+        sd = torch.load(ckpt_path, map_location="cpu", weights_only=False)["state_dict"]
         net_sd = {
             k[len("net."):]: v for k, v in sd.items() if k.startswith("net.")
         }
