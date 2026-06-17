@@ -255,6 +255,143 @@ def _print_summary(s):
 
 
 # ---------------------------------------------------------------------------
+# Cross-paradigm comparison (MARIUS vs SASRec) + multi-seed aggregation.
+# Requires the SCORED depth-100 dumps produced by jobs/28_rescore_for_selective_*.sbatch:
+#   sasrec_seed<s>_topk100.npz (keys: topk_items, target_item, hist_len, scores)
+#   marius_seed<s>_topk100.npz (keys: topk_codes, target_codes, hist_len, scores)
+# ---------------------------------------------------------------------------
+
+SEEDS_TRY = [42, 43, 44]
+
+
+def rank_and_hits_sasrec(topk_items, target_item, scores, k=K):
+    """SASRec hit@k / ndcg@k / confidence from a dense scored dump.
+
+    topk_items (U, C) item ids, target_item (U,), scores (U, C) dot-product logits.
+    Candidates are ranked by descending score; confidence is the rank-1 (max) score.
+    Note SASRec's max dot-product is NOT a normalized likelihood (unlike MARIUS), which
+    is exactly the asymmetry this comparison probes.
+    """
+    order = np.argsort(-scores, axis=1)
+    items_ranked = np.take_along_axis(topk_items, order, axis=1)
+    scores_sorted = np.take_along_axis(scores, order, axis=1)
+    match = items_ranked == target_item[:, None]  # (U, C)
+    topk_match = match[:, :k]
+    hit = topk_match.any(axis=1)
+    rank = np.where(hit, topk_match.argmax(axis=1), -1)
+    safe_rank = np.maximum(rank, 0)
+    ndcg = np.where(rank >= 0, 1.0 / np.log2(safe_rank.astype(np.float64) + 2.0), 0.0)
+    conf = scores_sorted[:, 0]
+    return hit, ndcg, conf
+
+
+def _marius_metrics(category, seed):
+    p = TOPK_DIR / category / f"marius_seed{seed}_topk100.npz"
+    if not p.exists():
+        return None
+    d = np.load(p)
+    if "scores" not in d.files:
+        return None
+    hit, ndcg, conf, _m = rank_and_hits(
+        d["topk_codes"], d["target_codes"], d["scores"].astype(np.float64), k=K)
+    return {"hit": hit, "ndcg": ndcg, "conf": conf}
+
+
+def _sasrec_metrics(category, seed):
+    p = TOPK_DIR / category / f"sasrec_seed{seed}_topk100.npz"
+    if not p.exists():
+        return None
+    d = np.load(p)
+    if "scores" not in d.files:
+        return None
+    hit, ndcg, conf = rank_and_hits_sasrec(
+        d["topk_items"], d["target_item"], d["scores"].astype(np.float64), k=K)
+    return {"hit": hit, "ndcg": ndcg, "conf": conf}
+
+
+def _agg_curves(per_seed_curves):
+    """per_seed_curves: list of selective_curve dicts (keyed by coverage float).
+    Returns {"<cov>": {mean, std, n_seeds}} aggregated across seeds."""
+    out = {}
+    for c in COVERAGES:
+        vals = np.array([d[c] for d in per_seed_curves], dtype=np.float64)
+        out[f"{c:.2f}"] = {"mean": float(vals.mean()),
+                           "std": float(vals.std(ddof=0)),
+                           "n_seeds": int(vals.size)}
+    return out
+
+
+def analyse_cross(category, out_dir=OUT_DIR):
+    """Cross-paradigm selective comparison + multi-seed aggregation.
+
+    Each model abstains on its OWN low-confidence users, so the curves are compared
+    head-to-head at matched answered-coverage (no per-user alignment needed). Degrades
+    gracefully: if a model's scored dumps are absent, it is skipped and the head-to-head
+    is reported as unavailable.
+    """
+    methods = {"marius": _marius_metrics, "sasrec": _sasrec_metrics}
+    found = {}
+    per_method = {}
+    for name, fn in methods.items():
+        seeds, curves_hit, aurcs, bases = [], [], [], []
+        for s in SEEDS_TRY:
+            m = fn(category, s)
+            if m is None:
+                continue
+            seeds.append(s)
+            hit = m["hit"].astype(np.float64)
+            curves_hit.append(selective_curve(hit, m["conf"]))
+            a_conf, a_rand = aurc(1.0 - hit, m["conf"])
+            aurcs.append((a_conf, a_rand))
+            bases.append(float(hit.mean()))
+        found[name] = seeds
+        if seeds:
+            per_method[name] = {
+                "seeds": seeds,
+                "base_hit@10_mean": float(np.mean(bases)),
+                "selective_hit@10": _agg_curves(curves_hit),
+                "aurc_mean": float(np.mean([a for a, _ in aurcs])),
+                "aurc_random_mean": float(np.mean([r for _, r in aurcs])),
+            }
+
+    summary = {"category": category, "k": K, "found_seeds": found, "per_method": per_method}
+    if "marius" in per_method and "sasrec" in per_method:
+        h2h = {}
+        for c in COVERAGES:
+            mk = f"{c:.2f}"
+            mm = per_method["marius"]["selective_hit@10"][mk]["mean"]
+            ss = per_method["sasrec"]["selective_hit@10"][mk]["mean"]
+            h2h[mk] = {"marius": mm, "sasrec": ss, "marius_minus_sasrec": mm - ss}
+        summary["head_to_head_selective_hit@10"] = h2h
+        summary["marius_aurc_beats_sasrec"] = bool(
+            per_method["marius"]["aurc_mean"] < per_method["sasrec"]["aurc_mean"])
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / f"{category}_cross_paradigm.json").write_text(json.dumps(summary, indent=2))
+    return summary
+
+
+def _print_cross(s):
+    print(f"\n=== CROSS-PARADIGM {s['category']} (seeds found: {s['found_seeds']}) ===")
+    for name, pm in s.get("per_method", {}).items():
+        sc = pm["selective_hit@10"]
+        line = "  ".join(f"{c}->{sc[c]['mean']:.4f}+-{sc[c]['std']:.4f}"
+                          for c in ["1.00", "0.10", "0.05"])
+        print(f"  {name}: base={pm['base_hit@10_mean']:.4f}  sel {line}  "
+              f"AURC={pm['aurc_mean']:.4f}")
+    if "head_to_head_selective_hit@10" in s:
+        h = s["head_to_head_selective_hit@10"]
+        print("  head-to-head (MARIUS - SASRec) selective-Hit@10: "
+              + "  ".join(f"{c}:{h[c]['marius_minus_sasrec']:+.4f}" for c in ["1.00", "0.10", "0.05"]))
+        print(f"  MARIUS AURC beats SASRec: {s['marius_aurc_beats_sasrec']} "
+              f"(honest: may be flat/negative since MARIUS absolute recall is lower)")
+    else:
+        missing = [m for m in ["marius", "sasrec"] if m not in s.get("per_method", {})]
+        print(f"  head-to-head UNAVAILABLE; missing scored depth-100 dumps for: {missing}. "
+              f"Run jobs/28_rescore_for_selective_*.sbatch on Snellius first.")
+
+
+# ---------------------------------------------------------------------------
 # Self-test (synthetic, no data / no GPU).
 # ---------------------------------------------------------------------------
 
@@ -282,6 +419,27 @@ def _selftest():
     tok = np.array([[2, 258, 514, 770], [3, 259, 515, 771]], dtype=np.int64)
     deoff = tok - LEVEL_OFFSET
     assert (deoff == np.array([[0, 0, 0, 0], [1, 1, 1, 1]])).all(), "de-offset wrong"
+
+    # SASRec hit@k by item-id match, ranked by descending score.
+    topk_items = np.array([[5, 2, 7, 1], [9, 3, 4, 8]])
+    target_item = np.array([7, 9])
+    sc = np.array([[0.9, 0.5, 0.8, 0.1], [0.2, 0.3, 0.1, 0.7]], dtype=np.float64)
+    hit_s, ndcg_s, conf_s = rank_and_hits_sasrec(topk_items, target_item, sc, k=4)
+    # row0 ranked [5,7,2,1] -> target 7 at rank 1 -> ndcg=1/log2(3); row1 ranked [8,3,9,4]
+    # -> target 9 at rank 2 -> ndcg=1/log2(4)=0.5.
+    assert hit_s.all(), "sasrec hits wrong"
+    assert np.allclose(conf_s, [0.9, 0.7]), f"sasrec confidence wrong: {conf_s}"
+    assert abs(ndcg_s[0] - 1.0 / np.log2(3.0)) < 1e-9 and abs(ndcg_s[1] - 0.5) < 1e-9, "sasrec ndcg wrong"
+    miss_target = np.array([99, 99])  # target not in candidates -> miss
+    hit_m, ndcg_m, _ = rank_and_hits_sasrec(topk_items, miss_target, sc, k=4)
+    assert (~hit_m).all() and (ndcg_m == 0).all(), "sasrec miss must be 0"
+
+    # Multi-seed curve aggregation: three seeds with per-coverage values 0.1/0.2/0.3.
+    per_seed = [dict((c, 0.1 * i) for c in COVERAGES) for i in (1, 2, 3)]
+    agg = _agg_curves(per_seed)
+    assert abs(agg["1.00"]["mean"] - 0.2) < 1e-9 and agg["1.00"]["n_seeds"] == 3, "agg mean/n wrong"
+    assert abs(agg["1.00"]["std"] - np.std([0.1, 0.2, 0.3])) < 1e-9, "agg std wrong"
+
     print("  selective_prediction selftest: PASS")
 
 
@@ -290,11 +448,19 @@ def main():
     ap.add_argument("--category", choices=CATEGORIES, default=None,
                     help="dataset; default runs both")
     ap.add_argument("--selftest", action="store_true", help="synthetic checks, no data")
+    ap.add_argument("--cross-paradigm", action="store_true",
+                    help="MARIUS-vs-SASRec selective comparison + multi-seed aggregation "
+                         "(needs the scored depth-100 dumps from jobs/28)")
     args = ap.parse_args()
     if args.selftest:
         _selftest()
         return 0
     cats = [args.category] if args.category else CATEGORIES
+    if args.cross_paradigm:
+        for cat in cats:
+            _print_cross(analyse_cross(cat))
+        print(f"\nWrote cross-paradigm summaries to {OUT_DIR}")
+        return 0
     for cat in cats:
         s = analyse(cat)
         _print_summary(s)
