@@ -22,6 +22,7 @@ def load_runs(input_dir: Path) -> list[dict]:
 def to_rows(runs: list[dict]) -> list[dict]:
     rows = []
     for run in runs:
+        ild = run.get("ild")
         if run["mode"] == "generative":
             for level, (g, e) in enumerate(zip(run["gini_per_level"], run["entropy_per_level"])):
                 rows.append(
@@ -31,6 +32,8 @@ def to_rows(runs: list[dict]) -> list[dict]:
                         "level": str(level),
                         "gini": g,
                         "entropy": e,
+                        # ILD is a single list-level scalar, not per RVQ level; attach to level 0 row only
+                        "ild": ild if level == 0 else None,
                         "n_total": run["k_per_level"],
                         "valid_HR10": run["valid_HR10"],
                     }
@@ -43,6 +46,7 @@ def to_rows(runs: list[dict]) -> list[dict]:
                     "level": "item",
                     "gini": run["gini"],
                     "entropy": run["entropy"],
+                    "ild": ild,
                     "n_total": run["n_items"],
                     "valid_HR10": run["valid_HR10"],
                 }
@@ -52,7 +56,7 @@ def to_rows(runs: list[dict]) -> list[dict]:
 
 def write_csv(rows: list[dict], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = ["method", "seed", "level", "gini", "entropy", "n_total", "valid_HR10"]
+    fieldnames = ["method", "seed", "level", "gini", "entropy", "ild", "n_total", "valid_HR10"]
     with path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -61,12 +65,14 @@ def write_csv(rows: list[dict], path: Path) -> None:
 
 
 def grouped_stats(rows: list[dict]) -> dict[tuple[str, str], dict]:
-    """(method, level) -> {gini: (mean, std, n), entropy: (mean, std, n)} across seeds."""
+    """(method, level) -> {gini, entropy, ild: (mean, std, n)} across seeds."""
     groups: dict[tuple[str, str], list[dict]] = {}
     for row in rows:
         groups.setdefault((row["method"], row["level"]), []).append(row)
-    return {
-        key: {
+
+    result = {}
+    for key, vals in groups.items():
+        entry = {
             "gini": (
                 float(np.mean([r["gini"] for r in vals])),
                 float(np.std([r["gini"] for r in vals])),
@@ -78,8 +84,11 @@ def grouped_stats(rows: list[dict]) -> dict[tuple[str, str], dict]:
                 len(vals),
             ),
         }
-        for key, vals in groups.items()
-    }
+        ild_vals = [r["ild"] for r in vals if r.get("ild") is not None]
+        if ild_vals:
+            entry["ild"] = (float(np.mean(ild_vals)), float(np.std(ild_vals)), len(ild_vals))
+        result[key] = entry
+    return result
 
 
 def write_summary_txt(rows: list[dict], stats: dict, category: str, path: Path) -> None:
@@ -87,18 +96,19 @@ def write_summary_txt(rows: list[dict], stats: dict, category: str, path: Path) 
     methods = sorted({row["method"] for row in rows})
 
     lines = [
-        f"{category} - Recommendation diversity: Gini index + Shannon entropy (test set, real checkpoints)",
+        f"{category} - Recommendation diversity: Gini + Entropy + ILD (test set, real checkpoints)",
         f"Generated: {datetime.now(timezone.utc).isoformat()}",
         f"Seeds: {seeds}",
         "",
         "Gini: higher = more concentrated/popularity-skewed recommendations.",
         "Entropy (nats): higher = more diverse/uniform recommendations.",
-        "MARIUS metrics are reported per RVQ level (conditioned on preceding levels);",
+        "ILD: mean pairwise distance within each user's list (binary for SASRec, normalized Hamming for MARIUS).",
+        "MARIUS Gini/Entropy are per RVQ level (conditioned on preceding levels); ILD is a single list-level value.",
         "SASRec metrics are a single flat value over recommended item ids.",
         "",
     ]
 
-    header = f"{'method':<10} | {'level':<6} | {'gini mean +/- std':<22} | {'entropy mean +/- std (nats)':<28}"
+    header = f"{'method':<10} | {'level':<6} | {'gini mean +/- std':<22} | {'entropy (nats)':<22} | {'ILD':<20}"
     lines.append(header)
     lines.append("-" * len(header))
     for method in methods:
@@ -107,8 +117,13 @@ def write_summary_txt(rows: list[dict], stats: dict, category: str, path: Path) 
             s = stats[(method, level)]
             gm, gs, n = s["gini"]
             em, es, _ = s["entropy"]
+            if "ild" in s:
+                im, is_, _ = s["ild"]
+                ild_str = f"{im:.4f} +/- {is_:.4f}"
+            else:
+                ild_str = "-"
             lines.append(
-                f"{method:<10} | {level:<6} | {gm:.4f} +/- {gs:.4f}        | {em:.4f} +/- {es:.4f}  (n={n})"
+                f"{method:<10} | {level:<6} | {gm:.4f} +/- {gs:.4f}        | {em:.4f} +/- {es:.4f}  | {ild_str}  (n={n})"
             )
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -128,7 +143,7 @@ def write_plot(stats: dict, category: str, path: Path) -> bool:
     marius_levels = sorted(
         (lvl for (m, lvl) in stats if m == "MARIUS"), key=int
     )
-    fig, (ax_gini, ax_ent) = plt.subplots(1, 2, figsize=(11, 4))
+    fig, (ax_gini, ax_ent, ax_ild) = plt.subplots(1, 3, figsize=(15, 4))
 
     for ax, metric, ylabel in [
         (ax_gini, "gini", "Gini index"),
@@ -156,6 +171,20 @@ def write_plot(stats: dict, category: str, path: Path) -> bool:
         ax.set_title(f"{category}: {ylabel}")
         ax.set_xticks(range(len(marius_levels)))
         ax.legend()
+
+    # ILD is a single scalar per method — show as a bar chart with error bars
+    ild_methods, ild_means, ild_stds = [], [], []
+    for method, key in [("MARIUS", ("MARIUS", "0")), ("SASRec", ("SASRec", "item"))]:
+        if key in stats and "ild" in stats[key]:
+            m, s, _ = stats[key]["ild"]
+            ild_methods.append(method)
+            ild_means.append(m)
+            ild_stds.append(s)
+    if ild_methods:
+        colors = ["steelblue" if m == "MARIUS" else "firebrick" for m in ild_methods]
+        ax_ild.bar(ild_methods, ild_means, yerr=ild_stds, capsize=6, color=colors, alpha=0.8)
+    ax_ild.set_ylabel("ILD")
+    ax_ild.set_title(f"{category}: Intra-List Diversity")
 
     fig.suptitle(f"{category}: recommendation diversity across seeds")
     fig.tight_layout()

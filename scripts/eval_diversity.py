@@ -26,8 +26,10 @@ from scripts.benchmark_extensions import FILENAMES, get_best_checkpoint
 from src.utils.metrics import (
     summarize_dense,
     summarize_dense_entropy,
+    summarize_dense_ild,
     summarize_generative,
     summarize_generative_entropy,
+    summarize_generative_ild,
 )
 from src.utils.tools import patch_fsspec
 
@@ -137,11 +139,13 @@ def evaluate_run(
         result["k_per_level"] = k_per_level
         result["gini_per_level"] = summarize_generative(gen, n_total_per_level=k_per_level)
         result["entropy_per_level"] = summarize_generative_entropy(gen, n_total_per_level=k_per_level)
+        result["ild"] = summarize_generative_ild(gen)
     else:
         n_items = cfg.model.net.vocab_size - 2  # minus PAD/BOS
         result["n_items"] = n_items
         result["gini"] = summarize_dense(gen, n_items=n_items)
         result["entropy"] = summarize_dense_entropy(gen, n_items=n_items)
+        result["ild"] = summarize_dense_ild(gen)
 
     return result
 

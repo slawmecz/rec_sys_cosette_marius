@@ -104,3 +104,37 @@ def summarize_dense_entropy(gen, n_items):
     """
     return entropy(gen.reshape(-1).tolist(), n_total=n_items)
 
+
+def summarize_dense_ild(gen):
+    """Intra-List Diversity for SASRec-style output using binary item distance.
+
+    `gen` shape (B, K). For each user, computes the fraction of item pairs that
+    are distinct, then averages across users. Range [0, 1].
+    """
+    gen = np.asarray(gen)
+    B, K = gen.shape
+    if K < 2:
+        return 0.0
+    n_pairs = K * (K - 1) / 2
+    diff = gen[:, :, None] != gen[:, None, :]  # B x K x K
+    mask = np.triu(np.ones((K, K), dtype=bool), k=1)
+    return float(diff[:, mask].sum(axis=1).mean() / n_pairs)
+
+
+def summarize_generative_ild(gen):
+    """Intra-List Diversity for MARIUS-style output using normalized Hamming distance.
+
+    `gen` shape (B, K, L). For each user, computes the mean pairwise normalized
+    Hamming distance (fraction of levels that differ) across all item pairs, then
+    averages across users. Range [0, 1].
+    """
+    gen = np.asarray(gen)
+    B, K, L = gen.shape
+    if K < 2:
+        return 0.0
+    n_pairs = K * (K - 1) / 2
+    diff = gen[:, :, None, :] != gen[:, None, :, :]  # B x K x K x L
+    hamming = diff.sum(axis=-1) / L  # B x K x K
+    mask = np.triu(np.ones((K, K), dtype=bool), k=1)
+    return float(hamming[:, mask].sum(axis=1).mean() / n_pairs)
+
