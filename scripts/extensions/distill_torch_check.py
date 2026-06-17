@@ -265,10 +265,65 @@ def check_distill_prepro_live() -> None:
     print("  (v) check_distill_prepro_live: PASS")
 
 
+def check_distill_model_torch() -> None:
+    """Verify the MARIUSDistill KL-distillation term math on synthetic tensors.
+
+    A full MARIUSDistill.get_loss needs a trained SASRec++ teacher checkpoint and
+    an item_to_codes table, so the END-TO-END get_loss path is validated by the
+    Task-7 smoke train on Snellius, not here. This check pins down the one piece
+    of numerics local self-review cannot reach with torch absent: that
+    F.kl_div(F.log_softmax(student), F.log_softmax(teacher/temp), log_target=True,
+    reduction="batchmean") equals KL(teacher || student) averaged over the batch,
+    matching the direction and reduction MARIUSDistill.get_loss uses.
+    """
+    torch.manual_seed(0)
+    B, C = 4, 8
+    temp = 2.0
+    student_logp = torch.randn(B, C)
+    teacher_logits = torch.randn(B, C)
+
+    log_q = F.log_softmax(student_logp, dim=-1)            # student
+    log_p = F.log_softmax(teacher_logits / temp, dim=-1)   # teacher (temp-scaled)
+
+    # The exact call MARIUSDistill.get_loss makes.
+    kl_fkldiv = F.kl_div(
+        log_q, log_p, log_target=True, reduction="batchmean"
+    )
+
+    # Manual KL(teacher || student) = (1/B) sum_b sum_i p_bi (log p_bi - log q_bi).
+    p = log_p.exp()
+    kl_manual = (p * (log_p - log_q)).sum() / B
+
+    assert torch.allclose(kl_fkldiv, kl_manual, atol=1e-6), (
+        f"KL direction/reduction mismatch: F.kl_div={kl_fkldiv.item()} "
+        f"vs manual KL(teacher||student)={kl_manual.item()}"
+    )
+
+    # The reverse direction differs, so the orientation is not accidental.
+    q = log_q.exp()
+    kl_reverse = (q * (log_q - log_p)).sum() / B
+    assert not torch.allclose(kl_fkldiv, kl_reverse, atol=1e-6), (
+        "KL appears symmetric on this input; cannot distinguish teacher||student "
+        "from student||teacher"
+    )
+
+    # Identical distributions => KL == 0.
+    kl_zero = F.kl_div(log_p, log_p, log_target=True, reduction="batchmean")
+    assert torch.allclose(kl_zero, torch.zeros(()), atol=1e-6), (
+        "KL of identical distributions must be 0"
+    )
+
+    # Non-negativity (Gibbs' inequality).
+    assert kl_fkldiv.item() >= -1e-6, "KL must be non-negative"
+
+    print("  (vi) check_distill_model_torch (KL direction + reduction): PASS")
+
+
 def main() -> int:
     check_numeric()
     check_distill_utils_torch()
     check_distill_prepro_live()
+    check_distill_model_torch()
     print("OK: distill_torch_check passed.")
     return 0
 

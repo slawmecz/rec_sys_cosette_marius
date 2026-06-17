@@ -22,6 +22,7 @@ REPO = Path(__file__).resolve().parents[2]
 SCORING = REPO / "scripts" / "extensions" / "scoring.py"
 DISTILL_UTILS = REPO / "scripts" / "extensions" / "distill_utils.py"
 MARIUS_PY = REPO / "src" / "data" / "marius.py"
+MARIUS_DISTILL_PY = REPO / "src" / "models" / "marius_distill.py"
 
 sys.path.insert(0, str(REPO))
 
@@ -266,10 +267,210 @@ def check_distill_prepro() -> None:
     print("  check_distill_prepro (Part B - numpy mirror): PASS")
 
 
+def check_distill_model() -> None:
+    """Two-part verification for src/models/marius_distill.py (MARIUSDistill).
+
+    Part A: AST/static checks on the source (no torch import, since the module
+    pulls in torch + ray at import time). Confirms the override surface,
+    early-return, RAW-logit return, the unregistered-teacher storage idiom, and
+    ASCII-only.
+
+    Part B: numpy mirror of the KL-divergence term, asserting the KL direction
+    (teacher || student) and the batchmean reduction match F.kl_div's contract
+    on synthetic vectors.
+    """
+
+    # ----- Part A: AST/static checks -----
+
+    text = MARIUS_DISTILL_PY.read_text()
+    assert all(ord(c) < 128 for c in text), "non-ASCII characters in marius_distill.py"
+
+    tree = ast.parse(text)
+
+    # Find MARIUSDistill class node.
+    distill_cls = None
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name == "MARIUSDistill":
+            distill_cls = node
+            break
+    assert distill_cls is not None, "MARIUSDistill class not found in marius_distill.py"
+
+    # Must subclass MARIUS.
+    base_names = []
+    for base in distill_cls.bases:
+        if isinstance(base, ast.Name):
+            base_names.append(base.id)
+        elif isinstance(base, ast.Attribute):
+            base_names.append(base.attr)
+    assert "MARIUS" in base_names, (
+        f"MARIUSDistill must subclass MARIUS, found bases: {base_names}"
+    )
+
+    # Must define EXACTLY {__init__, get_loss} as methods.
+    method_names = {
+        n.name for n in distill_cls.body if isinstance(n, ast.FunctionDef)
+    }
+    assert method_names == {"__init__", "get_loss"}, (
+        f"MARIUSDistill must define ONLY __init__ and get_loss, found: {method_names}"
+    )
+
+    # Must NOT define the inherited inference/forward methods.
+    forbidden = {"search", "train_forward", "depth_forward", "temporal_forward"}
+    overlap = method_names & forbidden
+    assert not overlap, (
+        f"MARIUSDistill must NOT override inference/forward methods: {overlap}"
+    )
+
+    # get_loss must contain the distill_alpha == 0.0 early-return guard.
+    get_loss_fn = next(
+        n for n in distill_cls.body
+        if isinstance(n, ast.FunctionDef) and n.name == "get_loss"
+    )
+    found_alpha_guard = False
+    for node in ast.walk(get_loss_fn):
+        if isinstance(node, ast.Compare):
+            # self.distill_alpha == 0.0
+            left = node.left
+            if (
+                isinstance(left, ast.Attribute)
+                and left.attr == "distill_alpha"
+                and any(isinstance(op, ast.Eq) for op in node.ops)
+            ):
+                found_alpha_guard = True
+    assert found_alpha_guard, (
+        "get_loss must guard on self.distill_alpha == 0.0 (baseline early-return)"
+    )
+
+    # get_loss must return rearranged RAW logits: rearrange(logits, "B k v -> B v k").
+    found_raw_return = False
+    for node in ast.walk(get_loss_fn):
+        if isinstance(node, ast.Call):
+            func = node.func
+            is_rearrange = (
+                (isinstance(func, ast.Name) and func.id == "rearrange")
+                or (isinstance(func, ast.Attribute) and func.attr == "rearrange")
+            )
+            if is_rearrange and node.args:
+                first = node.args[0]
+                if isinstance(first, ast.Name) and first.id == "logits":
+                    # second arg should be the rearrange pattern literal
+                    for a in node.args[1:]:
+                        if (
+                            isinstance(a, ast.Constant)
+                            and isinstance(a.value, str)
+                            and "B k v -> B v k" in a.value
+                        ):
+                            found_raw_return = True
+    assert found_raw_return, (
+        "get_loss must return rearrange(logits, 'B k v -> B v k') (RAW logits)"
+    )
+
+    # Teacher must be stored WITHOUT submodule registration, i.e. via
+    # object.__setattr__(self, '_teacher', ...) or self.__dict__['_teacher'] = ...
+    # and NOT via a plain attribute assignment self._teacher = ... .
+    init_fn = next(
+        n for n in distill_cls.body
+        if isinstance(n, ast.FunctionDef) and n.name == "__init__"
+    )
+
+    uses_object_setattr = False
+    uses_dict_assign = False
+    uses_plain_attr_assign = False
+    for node in ast.walk(init_fn):
+        # object.__setattr__(self, "_teacher", teacher)
+        if isinstance(node, ast.Call):
+            func = node.func
+            if (
+                isinstance(func, ast.Attribute)
+                and func.attr == "__setattr__"
+                and isinstance(func.value, ast.Name)
+                and func.value.id == "object"
+            ):
+                # confirm second arg is the "_teacher" name
+                if len(node.args) >= 2:
+                    a1 = node.args[1]
+                    if isinstance(a1, ast.Constant) and a1.value == "_teacher":
+                        uses_object_setattr = True
+        # self.__dict__["_teacher"] = teacher
+        if isinstance(node, ast.Assign):
+            for tgt in node.targets:
+                if (
+                    isinstance(tgt, ast.Subscript)
+                    and isinstance(tgt.value, ast.Attribute)
+                    and tgt.value.attr == "__dict__"
+                ):
+                    sl = tgt.slice
+                    if isinstance(sl, ast.Constant) and sl.value == "_teacher":
+                        uses_dict_assign = True
+                # plain self._teacher = ... (the BAD pattern: auto-registers)
+                if (
+                    isinstance(tgt, ast.Attribute)
+                    and tgt.attr == "_teacher"
+                    and isinstance(tgt.value, ast.Name)
+                    and tgt.value.id == "self"
+                ):
+                    uses_plain_attr_assign = True
+
+    assert uses_object_setattr or uses_dict_assign, (
+        "teacher must be stored via object.__setattr__(self, '_teacher', ...) or "
+        "self.__dict__['_teacher'] = ... (NOT a plain attribute assignment, which "
+        "auto-registers it as a submodule)"
+    )
+    assert not uses_plain_attr_assign, (
+        "teacher must NOT be stored via self._teacher = ... (that auto-registers it "
+        "as a submodule, polluting the optimizer and the checkpoint state_dict)"
+    )
+
+    print("  check_distill_model (Part A - AST): PASS")
+
+    # ----- Part B: numpy mirror of the KL term (direction + reduction) -----
+
+    # F.kl_div(input=log q, target=log p, log_target=True, reduction="batchmean")
+    # computes (1/B) * sum_b sum_i p_bi * (log p_bi - log q_bi) = KL(p || q),
+    # i.e. with input=student log-softmax and target=teacher log-softmax this is
+    # KL(teacher || student). Reimplement that here on synthetic logits.
+
+    def _log_softmax(x: np.ndarray) -> np.ndarray:
+        m = x.max(axis=-1, keepdims=True)
+        z = x - m
+        return z - np.log(np.exp(z).sum(axis=-1, keepdims=True))
+
+    rng = np.random.default_rng(0)
+    B, C = 4, 8
+    temp = 2.0
+    student_logp_in = rng.standard_normal((B, C)).astype(np.float64)
+    teacher_logits = rng.standard_normal((B, C)).astype(np.float64)
+
+    log_q = _log_softmax(student_logp_in)            # student
+    log_p = _log_softmax(teacher_logits / temp)      # teacher (temp-scaled)
+    p = np.exp(log_p)
+
+    # KL(teacher || student), batchmean (divide by batch size B).
+    kl_teacher_student = (p * (log_p - log_q)).sum() / B
+
+    # The reverse direction KL(student || teacher) would differ; assert they do.
+    q = np.exp(log_q)
+    kl_student_teacher = (q * (log_q - log_p)).sum() / B
+    assert kl_teacher_student >= 0.0, "KL must be non-negative"
+    assert not np.isclose(kl_teacher_student, kl_student_teacher), (
+        "KL is not symmetric; the mirror must distinguish teacher||student "
+        "from student||teacher"
+    )
+
+    # Identical distributions => KL == 0 (sanity of the reduction/direction).
+    same = _log_softmax(teacher_logits)
+    p_same = np.exp(same)
+    kl_zero = (p_same * (same - same)).sum() / B
+    assert np.isclose(kl_zero, 0.0), "KL of identical distributions must be 0"
+
+    print("  check_distill_model (Part B - numpy KL mirror): PASS")
+
+
 def main() -> int:
     check_scoring()
     check_distill_utils()
     check_distill_prepro()
+    check_distill_model()
     print("OK: distill_selftest passed.")
     return 0
 
