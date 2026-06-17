@@ -7,7 +7,7 @@ as MBR weights. This module imports torch and therefore must NEVER be imported
 by the locally-run numpy CLIs (mbr.py, compute_beyond_accuracy.py); on the
 local machine it is only syntax-checked with python3 -m py_compile.
 
-Both functions are read-only with respect to the models: they call the
+All scoring functions are read-only with respect to the models: they call the
 authors' PUBLIC modules (MARIUS.temporal_forward / mid_proj / depth_emb /
 depth_forward, SASRec.forward / get_embs) exactly as train_forward / search
 do, without touching any model code.

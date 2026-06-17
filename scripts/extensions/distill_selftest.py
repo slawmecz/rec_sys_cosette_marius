@@ -10,7 +10,6 @@ no GPU, no torch import.
 from __future__ import annotations
 
 import ast
-import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -46,7 +45,7 @@ def check_scoring() -> None:
             and d.func.value.id == "torch"
         ):
             found_no_grad = True
-        # Also accept name form: @no_grad (unlikely but safe to handle)
+        # Also accept the no-parens attribute form: @torch.no_grad
         elif isinstance(d, ast.Attribute) and d.attr == "no_grad":
             found_no_grad = True
     assert found_no_grad, "score_marius_tuples must have @torch.no_grad() decorator"

@@ -19,7 +19,7 @@ try:
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
-except Exception:
+except ImportError:
     print("torch unavailable -> SKIP (run on Snellius)")
     raise SystemExit(0)
 
@@ -41,8 +41,6 @@ class _StubNet(nn.Module):
 
     def __init__(self, d_temp: int = 16, d: int = 8, V: int = 32, L: int = 4) -> None:
         super().__init__()
-        self.d = d
-        self.L = L
         # temporal encoder: produces (B, T, d_temp)
         self._enc = nn.Linear(d_temp, d_temp)
         # mid projection: d_temp -> d
