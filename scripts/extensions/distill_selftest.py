@@ -23,6 +23,7 @@ SCORING = REPO / "scripts" / "extensions" / "scoring.py"
 DISTILL_UTILS = REPO / "scripts" / "extensions" / "distill_utils.py"
 MARIUS_PY = REPO / "src" / "data" / "marius.py"
 MARIUS_DISTILL_PY = REPO / "src" / "models" / "marius_distill.py"
+JOBS27 = REPO / "jobs" / "27_distill_sports.sbatch"
 
 sys.path.insert(0, str(REPO))
 
@@ -466,11 +467,161 @@ def check_distill_model() -> None:
     print("  check_distill_model (Part B - numpy KL mirror): PASS")
 
 
+def check_distill_utils_dumper() -> None:
+    """AST check on the offline dumper added to distill_utils.py.
+
+    Confirms that adding the dump_item_to_codes function and the __main__
+    CLI did NOT introduce a top-level torch import (which would break the
+    torch-free import of the numpy cores by this selftest) and that the
+    dumper exists with the expected signature.
+    """
+
+    text = DISTILL_UTILS.read_text()
+    assert all(ord(c) < 128 for c in text), "non-ASCII characters in distill_utils.py"
+
+    tree = ast.parse(text)
+
+    # No top-level "import torch" / "from torch ...": torch must stay LAZY
+    # (imported inside function bodies only), or distill_selftest's import of
+    # the numpy cores would fail in the torch-free local environment.
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                assert not alias.name.split(".")[0] == "torch", (
+                    "distill_utils.py must not import torch at module top level"
+                )
+        if isinstance(node, ast.ImportFrom):
+            assert not (node.module or "").split(".")[0] == "torch", (
+                "distill_utils.py must not import torch at module top level"
+            )
+
+    # dump_item_to_codes must exist with the three expected parameters.
+    funcs = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    assert "dump_item_to_codes" in funcs, (
+        "distill_utils.py must define dump_item_to_codes"
+    )
+    dump_fn = funcs["dump_item_to_codes"]
+    arg_names = [a.arg for a in dump_fn.args.args]
+    for expected in ("quant_parquet", "items_pickle", "out_path"):
+        assert expected in arg_names, (
+            f"dump_item_to_codes missing parameter {expected}; has {arg_names}"
+        )
+
+    # The dumper must lazily import torch inside its body (not at top level)
+    # and call build_item_to_codes_np.
+    dump_imports_torch_lazily = False
+    dump_calls_core = False
+    for node in ast.walk(dump_fn):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".")[0] == "torch":
+                    dump_imports_torch_lazily = True
+        if isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Name) and func.id == "build_item_to_codes_np":
+                dump_calls_core = True
+    assert dump_imports_torch_lazily, (
+        "dump_item_to_codes must lazily import torch inside its body"
+    )
+    assert dump_calls_core, (
+        "dump_item_to_codes must call build_item_to_codes_np"
+    )
+
+    # There must be an `if __name__ == "__main__":` guard.
+    has_main_guard = False
+    for node in tree.body:
+        if isinstance(node, ast.If) and isinstance(node.test, ast.Compare):
+            left = node.test.left
+            if (
+                isinstance(left, ast.Name)
+                and left.id == "__name__"
+                and any(isinstance(c, ast.Constant) and c.value == "__main__"
+                        for c in node.test.comparators)
+            ):
+                has_main_guard = True
+    assert has_main_guard, "distill_utils.py must have an if __name__ == '__main__' CLI"
+
+    print("  check_distill_utils_dumper: PASS")
+
+
+def check_jobs27() -> None:
+    """Text check on jobs/27_distill_sports.sbatch.
+
+    Asserts the launcher carries the key distillation overrides (model
+    _target_, the prepro class swap, the Sports quant id, a FRESH OUTPUT_ROOT
+    exported BEFORE the env source, isolated eval output paths) and is
+    ASCII-only.
+    """
+
+    assert JOBS27.exists(), "jobs/27_distill_sports.sbatch not found"
+    text = JOBS27.read_text()
+    assert all(ord(c) < 128 for c in text), (
+        "non-ASCII characters in 27_distill_sports.sbatch"
+    )
+
+    # MARIUSDistill model target override.
+    assert "model.net._target_=src.models.marius_distill.MARIUSDistill" in text, (
+        "27_distill_sports.sbatch must select MARIUSDistill via model.net._target_"
+    )
+
+    # Prepro class swap to MARIUSDistillPrePro.
+    assert (
+        "data.ray_datasets.prepro_cfg._cls_=src.data.marius.MARIUSDistillPrePro"
+        in text
+    ), "27_distill_sports.sbatch must swap prepro to MARIUSDistillPrePro"
+
+    # Sports quant id (24cd on this account) is kept.
+    assert "24cd" in text, (
+        "27_distill_sports.sbatch must keep the Sports QUANT_ID (24cd)"
+    )
+
+    # Distillation hyperparameter overrides must all be present.
+    for key in (
+        "+model.net.distill_alpha",
+        "+model.net.distill_temp",
+        "+model.net.n_cand",
+        "+model.net.teacher_models_root",
+        "+model.net.teacher_run_dir",
+        "+model.net.item_to_codes_path",
+    ):
+        assert key in text, f"27_distill_sports.sbatch missing override {key}"
+
+    # A FRESH OUTPUT_ROOT must be exported BEFORE the env is sourced.
+    export_pos = text.find("export OUTPUT_ROOT=")
+    source_pos = text.find("source ")
+    assert export_pos != -1, "27_distill_sports.sbatch must export OUTPUT_ROOT"
+    assert source_pos != -1, "27_distill_sports.sbatch must source an env file"
+    assert export_pos < source_pos, (
+        "OUTPUT_ROOT must be exported BEFORE the env is sourced "
+        "(the fresh-OUTPUT_ROOT trap)"
+    )
+    # The fresh root must be distinct from the logitadj one (a distill-specific
+    # variable), so it does not collide with the baseline / logitadj dirs.
+    assert "OUTPUT_ROOT_DISTILL" in text, (
+        "27_distill_sports.sbatch must use a distill-specific OUTPUT_ROOT_DISTILL"
+    )
+
+    # Eval outputs must go to isolated, distill-specific paths so the committed
+    # baseline CSVs are not clobbered.
+    assert "distill" in text and "beyond_accuracy" in text, (
+        "27_distill_sports.sbatch must write beyond-accuracy to an isolated "
+        "distill-specific path"
+    )
+    # The Top-K dump dir and the beyond-accuracy CSV must be distill-scoped.
+    assert "topk_distill_sports" in text, (
+        "27_distill_sports.sbatch must dump Top-K to a distill-specific dir"
+    )
+
+    print("  check_jobs27: PASS")
+
+
 def main() -> int:
     check_scoring()
     check_distill_utils()
+    check_distill_utils_dumper()
     check_distill_prepro()
     check_distill_model()
+    check_jobs27()
     print("OK: distill_selftest passed.")
     return 0
 

@@ -14,6 +14,13 @@ Two capabilities are provided:
      teacher's top-n_cand by score, with the TRUE item forced into column 0
      so it is always present in the candidate set.
 
+  3. dump_item_to_codes (offline CLI)
+     Builds the (n_catalog, 4) token table once from the COSETTE -col parquet
+     and the unique_items pickle and torch.save()s it so MARIUSDistill can
+     load it at train time (item_to_codes_path). Lazy torch import; run with:
+       python scripts/extensions/distill_utils.py \
+         --quant_parquet <parquet> --items_pickle <pkl> --out <table.pt>
+
 Design: the numpy cores (_np functions) are the logic source of truth and are
 importable without torch.  The torch wrappers lazily import torch and mirror
 the numpy cores exactly.  This lets the local selftest (no torch) run the
@@ -163,3 +170,91 @@ def make_candidates(
     target_np = target_catalog_idx.detach().cpu().numpy().astype(np.int64)
     result_np = make_candidates_np(scores_np, target_np, n_cand)
     return torch.from_numpy(result_np)
+
+
+# ---------------------------------------------------------------------------
+# 3. offline dumper (build the item->code-tuple table once, save to disk)
+# ---------------------------------------------------------------------------
+
+def dump_item_to_codes(quant_parquet: str, items_pickle: str, out_path: str) -> None:
+    """Build the catalog item->code-tuple table offline and save it to disk.
+
+    Loads the COSETTE -col tokenizer parquet and the unique_items pickle that
+    the MARIUS training pipeline uses, builds the (n_catalog, 4) MARIUS token
+    table with build_item_to_codes_np, and torch.save()s it as a LongTensor so
+    MARIUSDistill can torch.load() it at train time (item_to_codes_path).
+
+    Loading mirrors src/data/ray_data.py exactly:
+      - get_quantized: read_parquet, set_index("product_id"), keep sorted L*
+        columns (L0..L3).
+      - get_items_map: pickle.load gives the catalog-ordered list of
+        product_ids; catalog id i corresponds to position i in this list
+        (= SASRec item index - len(SpecialTokens)).
+
+    Parameters
+    ----------
+    quant_parquet:
+        Path to the COSETTE -col tokenizer parquet (a "product_id" column plus
+        per-level code columns L0, L1, L2, L3).
+    items_pickle:
+        Path to the unique_items pickle (a list of product_ids in catalog
+        order).
+    out_path:
+        Destination path for torch.save of the LongTensor table.
+
+    Notes
+    -----
+    Torch is imported LAZILY so this module stays importable without torch
+    (the numpy cores build_item_to_codes_np / make_candidates_np are used by
+    the torch-free local selftest).
+    """
+    import pickle  # noqa: PLC0415 (stdlib; kept local for symmetry)
+
+    import torch  # noqa: PLC0415 (lazy import intentional)
+
+    # Mirror get_quantized: index by product_id, keep sorted L* columns.
+    quant_df = pd.read_parquet(quant_parquet)
+    quant_df = quant_df.set_index("product_id")
+    sorted_cols = sorted(col for col in quant_df.columns if col.startswith("L"))
+    quant_df = quant_df[sorted_cols]
+
+    # Mirror get_items_map: the pickle is the catalog-ordered list of items.
+    with open(items_pickle, "rb") as f:
+        items = pickle.load(f)
+
+    table = build_item_to_codes_np(quant_df, list(items))
+    torch.save(torch.from_numpy(table), out_path)
+    print(
+        f"dump_item_to_codes: wrote {table.shape[0]} items x {table.shape[1]} "
+        f"codes to {out_path}"
+    )
+
+
+def _main() -> None:
+    import argparse  # noqa: PLC0415 (CLI entry; kept local)
+
+    parser = argparse.ArgumentParser(
+        description="Build and save the catalog item->code-tuple table for "
+        "MARIUSDistill (offline, run once per dataset/quant_id)."
+    )
+    parser.add_argument(
+        "--quant_parquet",
+        required=True,
+        help="Path to the COSETTE -col tokenizer parquet (product_id + L0..L3).",
+    )
+    parser.add_argument(
+        "--items_pickle",
+        required=True,
+        help="Path to the unique_items pickle (catalog-ordered product_ids).",
+    )
+    parser.add_argument(
+        "--out",
+        required=True,
+        help="Destination path for the saved LongTensor table (torch.save).",
+    )
+    args = parser.parse_args()
+    dump_item_to_codes(args.quant_parquet, args.items_pickle, args.out)
+
+
+if __name__ == "__main__":
+    _main()
