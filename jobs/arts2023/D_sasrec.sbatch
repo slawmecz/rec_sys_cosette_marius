@@ -35,7 +35,9 @@ python src/train.py experiment=sasrec \
 
 RUN_DIR="$(ls -t -d "${DATA_ROOT}"/models/SASRec_"${CATEGORY}"_seed"${SEED}"_* | head -1 | xargs -n1 basename)"
 echo "${RUN_DIR}" > "${PROJECT_ROOT}/runs/seed_${SEED}.sasrec"
-# SASRec is dense: enforce_filtering=false avoids setting filter_preds on a model that
-# has no such argument (MARIUS keeps the default True).
+# enforce_filtering=false is a no-op here: SASRec.filter_preds already defaults to True
+# (it is not set in configs/experiment/sasrec.yaml), so eval filters already-seen items
+# either way -- matching the paper's SASRec++ and MARIUS's filtered eval. The flag only
+# skips force-setting an already-True value (it does NOT disable filtering).
 python src/test.py run_directory="${RUN_DIR}" enforce_filtering=false ${PATHS_OVERRIDES}
 echo "D_SASREC_DONE seed=${SEED} run_dir=${RUN_DIR}"

@@ -75,6 +75,47 @@ SASRec++:
 Raw per-seed records (with run directories and timestamps):
 `reports/results/{marius,sasrec}_arts_5seed_full_scores.jsonl`.
 
+### Statistical significance (5 seeds)
+
+Regenerate with `python scripts/significance_arts.py` (reads the jsonl above; scipy-free —
+Student-t CIs with a bootstrap cross-check, plus an exact two-sample permutation test).
+
+**Q1 — 95% confidence intervals (Student-t).**
+
+| metric | MARIUS [95% CI] | SASRec [95% CI] |
+|--------|-----------------|-----------------|
+| R@5 | 3.32 [3.27, 3.36] | 3.31 [3.25, 3.37] |
+| NDCG@5 | 2.22 [2.19, 2.26] | 2.28 [2.23, 2.33] |
+| R@10 | 5.01 [4.97, 5.05] | 4.86 [4.79, 4.93] |
+| NDCG@10 | 2.77 [2.74, 2.80] | 2.78 [2.73, 2.83] |
+
+**Q2 — ours vs paper.** The paper's reported value lies **outside our 95% CI on every
+metric for both models** (3.8–8.1 std from our mean), so the shortfall is **systematic, not
+seed noise**. Strongest single piece of evidence: our MARIUS R@10 gap to the paper (−0.29 pp)
+closely matches the reference's own gap (−0.26 pp), pointing to a systematic effect (a
+validation→test generalization gap) rather than a reproduction error. We do **not** claim
+"significantly worse than the paper" — that needs the paper's per-seed variance, which is not
+published, so this is CI containment, not a two-sample test against the paper.
+
+**Q3a — MARIUS vs SASRec** (exact two-sample permutation test, Holm-corrected over 4 metrics):
+
+| metric | diff (M−S) | Welch t | perm p | Holm p | significant? |
+|--------|-----------|---------|--------|--------|--------------|
+| R@10 | +0.151 | +5.00 | 0.008 | **0.032** | **yes — MARIUS** |
+| NDCG@5 | −0.056 | −2.74 | 0.032 | 0.095 | no |
+| NDCG@10 | −0.009 | −0.43 | 0.683 | 1.000 | no |
+| R@5 | +0.005 | +0.17 | 0.865 | 1.000 | no |
+
+Only the **MARIUS R@10 advantage is significant** — it is perfectly separated across all
+5+5 seeds (perm p hits the n=5 floor of 2/252 = 0.008) and survives Holm. The other three
+metrics move in the paper's own direction (paper: SASRec NDCG@5 2.42 > MARIUS 2.37; MARIUS
+R@10 5.30 > SASRec 5.09) but are **not separately significant at 5 seeds** — NDCG@5 favors
+SASRec at uncorrected p = 0.032 but does not survive correction. Both models were evaluated
+under an identical filtered protocol (`filter_preds=True`), so this reflects the models, not
+the eval. Resolving the sub-threshold metrics would need a well-powered per-user paired test.
+(The paired across-seed test is omitted: at n=5 its sign-flip floor is 2/32 = 0.0625, so it
+cannot reach α = 0.05.)
+
 ---
 
 ## 2. How to reproduce (Snellius job pipeline)
@@ -124,7 +165,12 @@ reference recipe is restored via per-run Hydra overrides inside the job scripts:
   epoch**, and `max_steps` is reached over ~2 epochs. The smoke run (`max_steps=600`)
   should show ~300 steps/epoch and finish at 600.
 - COSETTE (B): ~192 steps/epoch at bs=1024.
-- SASRec test runs with `enforce_filtering=false`; MARIUS test runs with filtering (default).
+- **Filtering is identical for both models at eval (`filter_preds=True`** — already-seen
+  items removed from candidates). SASRec's `filter_preds` defaults to `True` (it is not set
+  in `configs/experiment/sasrec.yaml`), so the `enforce_filtering=false` in `D_sasrec.sbatch`
+  is a harmless no-op — it only skips force-setting an already-`True` flag, it does **not**
+  disable filtering. SASRec is filtered, matching the paper's SASRec++ and keeping the
+  MARIUS-vs-SASRec comparison on one eval protocol.
 
 ### Provenance written at run time
 
@@ -147,6 +193,9 @@ python scripts/aggregate_arts.py
 # Refresh the per-seed score jsonl the replication notebook reads
 # (reports/results/{marius,sasrec}_arts_5seed_full_scores.jsonl):
 python scripts/export_arts_scores.py
+
+# Statistical significance over the 5-seed scores (CIs, MARIUS-vs-SASRec, vs paper):
+python scripts/significance_arts.py
 ```
 
 Both accept `--data-root` / `--runs-dir` if `DATA_ROOT`/`PROJECT_ROOT` are not exported.
