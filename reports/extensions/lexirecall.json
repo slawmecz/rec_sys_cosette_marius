@@ -1,0 +1,54 @@
+{
+  "Sports_and_Outdoors": {
+    "seed": 42,
+    "topk": 20,
+    "note": "mean_tse is Total Search Efficiency with reciprocal-rank exposure (1/rank of relevant item; Diaz et al. TOIS 2026). With one relevant item per query, mean_tse equals MRR.",
+    "sasrec": {
+      "n_queries": 35598,
+      "mean_tse": 0.02000561521077379,
+      "mean_rr": 0.02000561521077379,
+      "mean_r_at_10": 0.046716107646496995,
+      "mean_r_at_20": 0.07079049384796898
+    },
+    "marius": {
+      "n_queries": 35598,
+      "mean_tse": 0.0209113128841961,
+      "mean_rr": 0.0209113128841961,
+      "mean_r_at_10": 0.048317321197820104,
+      "mean_r_at_20": 0.07433001854036744
+    },
+    "pairwise_lexirecall_sasrec_vs_marius": {
+      "n_queries": 35598,
+      "mean_lexirecall_pref": 0.002640597786392494,
+      "fraction_sasrec_preferred": 0.04941288836451486,
+      "fraction_marius_preferred": 0.046772290578122364,
+      "fraction_ties": 0.9038148210573628
+    }
+  },
+  "Beauty": {
+    "seed": 42,
+    "topk": 20,
+    "note": "mean_tse is Total Search Efficiency with reciprocal-rank exposure (1/rank of relevant item; Diaz et al. TOIS 2026). With one relevant item per query, mean_tse equals MRR.",
+    "sasrec": {
+      "n_queries": 22363,
+      "mean_tse": 0.0384692066568792,
+      "mean_rr": 0.0384692066568792,
+      "mean_r_at_10": 0.08321781514108124,
+      "mean_r_at_20": 0.11930420784331261
+    },
+    "marius": {
+      "n_queries": 22363,
+      "mean_tse": 0.03546542067872981,
+      "mean_rr": 0.03546542067872981,
+      "mean_r_at_10": 0.0801323614899611,
+      "mean_r_at_20": 0.11966194159996422
+    },
+    "pairwise_lexirecall_sasrec_vs_marius": {
+      "n_queries": 22363,
+      "mean_lexirecall_pref": 0.0015650851853508028,
+      "fraction_sasrec_preferred": 0.07199391852613692,
+      "fraction_marius_preferred": 0.07042883334078612,
+      "fraction_ties": 0.857577248133077
+    }
+  }
+}
