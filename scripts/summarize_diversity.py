@@ -24,7 +24,10 @@ def to_rows(runs: list[dict]) -> list[dict]:
     for run in runs:
         ild = run.get("ild")
         if run["mode"] == "generative":
-            for level, (g, e) in enumerate(zip(run["gini_per_level"], run["entropy_per_level"])):
+            support = run.get("support_per_level") or [{}] * len(run["gini_per_level"])
+            for level, (g, e, sup) in enumerate(
+                zip(run["gini_per_level"], run["entropy_per_level"], support)
+            ):
                 rows.append(
                     {
                         "method": run["method"],
@@ -35,6 +38,26 @@ def to_rows(runs: list[dict]) -> list[dict]:
                         # ILD is a single list-level scalar, not per RVQ level; attach to level 0 row only
                         "ild": ild if level == 0 else None,
                         "n_total": run["k_per_level"],
+                        # Support diagnostics for interpreting the conditional Gini/entropy.
+                        "n_groups": sup.get("n_groups"),
+                        "mean_group_size": sup.get("mean_group_size"),
+                        "mean_distinct_codes": sup.get("mean_distinct_codes"),
+                        "total_distinct_codes": sup.get("total_distinct_codes"),
+                        "valid_HR10": run["valid_HR10"],
+                    }
+                )
+            # Item-level row (full semantic-ID tuple as one item) for a like-for-like
+            # comparison with SASRec's item-level Gini/entropy.
+            if "gini" in run:
+                rows.append(
+                    {
+                        "method": run["method"],
+                        "seed": run["seed"],
+                        "level": "item",
+                        "gini": run["gini"],
+                        "entropy": run["entropy"],
+                        "ild": None,  # already counted on the level-0 row above
+                        "n_total": run["n_items"],
                         "valid_HR10": run["valid_HR10"],
                     }
                 )
@@ -56,7 +79,20 @@ def to_rows(runs: list[dict]) -> list[dict]:
 
 def write_csv(rows: list[dict], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = ["method", "seed", "level", "gini", "entropy", "ild", "n_total", "valid_HR10"]
+    fieldnames = [
+        "method",
+        "seed",
+        "level",
+        "gini",
+        "entropy",
+        "ild",
+        "n_total",
+        "n_groups",
+        "mean_group_size",
+        "mean_distinct_codes",
+        "total_distinct_codes",
+        "valid_HR10",
+    ]
     with path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -87,6 +123,11 @@ def grouped_stats(rows: list[dict]) -> dict[tuple[str, str], dict]:
         ild_vals = [r["ild"] for r in vals if r.get("ild") is not None]
         if ild_vals:
             entry["ild"] = (float(np.mean(ild_vals)), float(np.std(ild_vals)), len(ild_vals))
+        # Support diagnostics (generative per-level rows only): mean across seeds.
+        for field in ("mean_group_size", "mean_distinct_codes", "total_distinct_codes"):
+            field_vals = [r[field] for r in vals if r.get(field) is not None]
+            if field_vals:
+                entry[field] = float(np.mean(field_vals))
         result[key] = entry
     return result
 
@@ -108,7 +149,17 @@ def write_summary_txt(rows: list[dict], stats: dict, category: str, path: Path) 
         "",
     ]
 
-    header = f"{'method':<10} | {'level':<6} | {'gini mean +/- std':<22} | {'entropy (nats)':<22} | {'ILD':<20}"
+    lines.append(
+        "Support columns (MARIUS per-level only): grp = mean recs per conditioning group, "
+        "codes = mean distinct codes used per group. Small grp/codes at deeper levels means a "
+        "low Gini there can be a support artifact rather than genuine uniformity."
+    )
+    lines.append("")
+
+    header = (
+        f"{'method':<10} | {'level':<6} | {'gini mean +/- std':<22} | {'entropy (nats)':<22} | "
+        f"{'ILD':<20} | {'grp':>7} | {'codes':>7}"
+    )
     lines.append(header)
     lines.append("-" * len(header))
     for method in methods:
@@ -122,8 +173,11 @@ def write_summary_txt(rows: list[dict], stats: dict, category: str, path: Path) 
                 ild_str = f"{im:.4f} +/- {is_:.4f}"
             else:
                 ild_str = "-"
+            grp = f"{s['mean_group_size']:.2f}" if "mean_group_size" in s else "-"
+            codes = f"{s['mean_distinct_codes']:.2f}" if "mean_distinct_codes" in s else "-"
             lines.append(
-                f"{method:<10} | {level:<6} | {gm:.4f} +/- {gs:.4f}        | {em:.4f} +/- {es:.4f}  | {ild_str}  (n={n})"
+                f"{method:<10} | {level:<6} | {gm:.4f} +/- {gs:.4f}        | "
+                f"{em:.4f} +/- {es:.4f}  | {ild_str:<20} | {grp:>7} | {codes:>7}  (n={n})"
             )
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -141,7 +195,7 @@ def write_plot(stats: dict, category: str, path: Path) -> bool:
         return False
 
     marius_levels = sorted(
-        (lvl for (m, lvl) in stats if m == "MARIUS"), key=int
+        (lvl for (m, lvl) in stats if m == "MARIUS" and lvl != "item"), key=int
     )
     fig, (ax_gini, ax_ent, ax_ild) = plt.subplots(1, 3, figsize=(15, 4))
 

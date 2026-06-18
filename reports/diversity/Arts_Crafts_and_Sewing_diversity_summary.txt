@@ -1,0 +1,17 @@
+Arts_Crafts_and_Sewing - Recommendation diversity: Gini + Entropy + ILD (test set, real checkpoints)
+Generated: 2026-06-18T01:58:28.282802+00:00
+Seeds: [42, 44, 46, 48, 50]
+
+Gini: higher = more concentrated/popularity-skewed recommendations.
+Entropy (nats): higher = more diverse/uniform recommendations.
+ILD: mean pairwise distance within each user's list (binary for SASRec, normalized Hamming for MARIUS).
+MARIUS Gini/Entropy are per RVQ level (conditioned on preceding levels); ILD is a single list-level value.
+SASRec metrics are a single flat value over recommended item ids.
+
+method     | level  | gini mean +/- std      | entropy (nats)         | ILD                 
+--------------------------------------------------------------------------------------------
+MARIUS     | 0      | 0.9940 +/- 0.0001        | 0.0625 +/- 0.0002  | 0.2536 +/- 0.0000  (n=5)
+MARIUS     | 1      | 0.9958 +/- 0.0000        | 0.0153 +/- 0.0001  | -  (n=5)
+MARIUS     | 2      | 0.9961 +/- 0.0000        | 0.0046 +/- 0.0001  | -  (n=5)
+MARIUS     | 3      | 0.9223 +/- 0.0000        | 2.9801 +/- 0.0001  | -  (n=5)
+SASRec     | item   | 0.9998 +/- 0.0000        | 2.9981 +/- 0.0000  | 1.0000 +/- 0.0000  (n=5)

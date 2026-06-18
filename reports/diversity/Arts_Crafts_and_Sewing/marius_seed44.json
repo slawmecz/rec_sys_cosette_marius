@@ -1,0 +1,25 @@
+{
+  "method": "MARIUS",
+  "seed": 44,
+  "category": "Arts_Crafts_and_Sewing",
+  "mode": "generative",
+  "run_directory": "MARIUS_Arts_Crafts_and_Sewing_seed44_2026-06-15_14-39-24",
+  "checkpoint": "/scratch-shared/scur1250/cosette_arts/models/MARIUS_Arts_Crafts_and_Sewing_seed44_2026-06-15_14-39-24/checkpoint_2026-06-15_16-55-18.660460/checkpoint.ckpt",
+  "n_results": 20,
+  "n_test_examples": 197286,
+  "valid_HR10": 0.05972547456622124,
+  "k_per_level": 256,
+  "gini_per_level": [
+    0.994104030759912,
+    0.9958272567332451,
+    0.996055999443701,
+    0.9222912718559604
+  ],
+  "entropy_per_level": [
+    0.06224812224132807,
+    0.015373096831198165,
+    0.004768087163221081,
+    2.9801092252410974
+  ],
+  "ild": 0.25360124387944405
+}

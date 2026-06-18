@@ -23,6 +23,7 @@ import torch
 from omegaconf import OmegaConf
 
 from scripts.benchmark_extensions import FILENAMES, get_best_checkpoint
+from src.data.ray_data import get_quantized
 from src.utils.metrics import (
     summarize_dense,
     summarize_dense_entropy,
@@ -30,6 +31,9 @@ from src.utils.metrics import (
     summarize_generative,
     summarize_generative_entropy,
     summarize_generative_ild,
+    summarize_generative_item,
+    summarize_generative_item_entropy,
+    summarize_generative_support,
 )
 from src.utils.tools import patch_fsspec
 
@@ -102,6 +106,21 @@ def collect_generations(cfg, ckpt_path: str, n_results: int, device: str, limit_
     return torch.cat(gens, dim=0).numpy(), n_examples
 
 
+def catalog_size(cfg) -> int:
+    """Number of distinct items in the category catalog.
+
+    Read from the COSETTE semantic-ID table (one row per item, unique after
+    collision removal). Matches SASRec's `vocab_size - 2` for the same dataset,
+    so the item-level Gini/entropy are comparable across methods.
+    """
+    rd = cfg.data.ray_datasets
+    path = cfg.paths.semantic_ids_tplt.format(
+        emb_method=rd.emb_id, category=rd.category, quant_method=rd.quant_id
+    )
+    fs = fsspec.filesystem(cfg.paths.protocol)
+    return len(get_quantized(fs, path))
+
+
 def evaluate_run(
     method: str,
     seed: int,
@@ -139,7 +158,17 @@ def evaluate_run(
         result["k_per_level"] = k_per_level
         result["gini_per_level"] = summarize_generative(gen, n_total_per_level=k_per_level)
         result["entropy_per_level"] = summarize_generative_entropy(gen, n_total_per_level=k_per_level)
+        # Support diagnostics so a per-level Gini/entropy change can be told apart
+        # from a shrinking-support artifact (fewer recs/codes per group at depth).
+        result["support_per_level"] = summarize_generative_support(gen)
         result["ild"] = summarize_generative_ild(gen)
+
+        # Item-level skew (full semantic-ID tuple = one item), so MARIUS is
+        # directly comparable to SASRec's item-level gini/entropy below.
+        n_items = catalog_size(cfg)
+        result["n_items"] = n_items
+        result["gini"] = summarize_generative_item(gen, n_items=n_items)
+        result["entropy"] = summarize_generative_item_entropy(gen, n_items=n_items)
     else:
         n_items = cfg.model.net.vocab_size - 2  # minus PAD/BOS
         result["n_items"] = n_items

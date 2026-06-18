@@ -47,12 +47,68 @@ def summarize_generative(gen, n_total_per_level):
     return [conditional_gini(codes, level, n_total=n_total_per_level) for level in range(L)]
 
 
+def summarize_generative_support(gen):
+    """Per-RVQ-level support diagnostics for interpreting conditional Gini/entropy.
+
+    Deeper levels condition on more preceding tokens, so each prefix-group holds
+    fewer recommendations and can mechanically use fewer codes - which shifts
+    Gini/entropy regardless of true concentration. For each level this returns
+    the number of conditioning groups, the mean recommendations per group, the
+    mean distinct codes used per group, and the total distinct codes used at the
+    level, so a per-level Gini change can be checked against shrinking support.
+
+    `gen` shape (B, K, L). Returns one dict per level (mirrors the grouping in
+    `conditional_gini`).
+    """
+    codes = [tuple(rec) for user in gen for rec in user]
+    L = len(codes[0])
+    out = []
+    for level in range(L):
+        groups = defaultdict(list)
+        for code in codes:
+            groups[code[:level]].append(code[level])
+        sizes = np.array([len(v) for v in groups.values()])
+        distinct = np.array([len(set(v)) for v in groups.values()])
+        out.append(
+            {
+                "n_groups": int(len(groups)),
+                "mean_group_size": float(sizes.mean()),
+                "mean_distinct_codes": float(distinct.mean()),
+                "total_distinct_codes": int(len({c[level] for c in codes})),
+            }
+        )
+    return out
+
+
 def summarize_dense(gen, n_items):
     """Flat Gini over recommended item ids for SASRec-style output.
 
     `gen` is recommended item ids, shape (B, n_results).
     """
     return gini(gen.reshape(-1).tolist(), n_total=n_items)
+
+
+def _item_ids(gen):
+    """Map each recommended semantic-ID tuple to a unique integer item id.
+
+    `gen` shape (B, K, L); the full L-tuple identifies one catalog item (codes
+    are unique per item after collision removal). Returns a flat (B*K,) array of
+    item identities, suitable for the flat `gini`/`entropy` helpers.
+    """
+    gen = np.asarray(gen)
+    flat = gen.reshape(-1, gen.shape[-1])
+    _, item_ids = np.unique(flat, axis=0, return_inverse=True)
+    return item_ids.ravel()
+
+
+def summarize_generative_item(gen, n_items):
+    """Flat item-level Gini for MARIUS-style output.
+
+    Treats each full semantic-ID tuple as one item, so the result is directly
+    comparable to `summarize_dense` (SASRec). `n_items` is the full catalog size,
+    so unrecommended items count toward inequality just like the dense case.
+    """
+    return gini(_item_ids(gen), n_total=n_items)
 
 
 def entropy(y, n_total=None):
@@ -103,6 +159,15 @@ def summarize_dense_entropy(gen, n_items):
     `gen` shape (B, n_results).
     """
     return entropy(gen.reshape(-1).tolist(), n_total=n_items)
+
+
+def summarize_generative_item_entropy(gen, n_items):
+    """Flat item-level entropy for MARIUS-style output.
+
+    Treats each full semantic-ID tuple as one item (comparable to SASRec's
+    `summarize_dense_entropy`). `n_items` is the full catalog size.
+    """
+    return entropy(_item_ids(gen), n_total=n_items)
 
 
 def summarize_dense_ild(gen):
