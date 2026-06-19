@@ -8,6 +8,8 @@
   "n_results": 20,
   "n_test_examples": 197286,
   "valid_HR10": 0.05911722034215927,
+  "category_level": "leaf",
+  "category_diversity": 0.05263247265391362,
   "k_per_level": 256,
   "gini_per_level": [
     0.9940561446168253,
@@ -19,7 +21,37 @@
     0.06243263211514113,
     0.015463447216472786,
     0.0045893395552298296,
-    2.980047527540895
+    2.9800475275408944
   ],
-  "ild": 0.25359572157332905
+  "support_per_level": [
+    {
+      "n_groups": 1,
+      "mean_group_size": 3945720.0,
+      "mean_distinct_codes": 251.0,
+      "total_distinct_codes": 251
+    },
+    {
+      "n_groups": 251,
+      "mean_group_size": 15720.0,
+      "mean_distinct_codes": 15.374501992031872,
+      "total_distinct_codes": 255
+    },
+    {
+      "n_groups": 3859,
+      "mean_group_size": 1022.4721430422389,
+      "mean_distinct_codes": 1.746048199015289,
+      "total_distinct_codes": 255
+    },
+    {
+      "n_groups": 6738,
+      "mean_group_size": 585.5921638468388,
+      "mean_distinct_codes": 1.193380825170674,
+      "total_distinct_codes": 276
+    }
+  ],
+  "ild": 0.25359572157332905,
+  "n_items": 89958,
+  "gini": 0.9995238520237487,
+  "entropy": 3.0625329464277393,
+  "item_ild": 1.0
 }

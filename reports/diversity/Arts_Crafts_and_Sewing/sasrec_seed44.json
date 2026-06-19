@@ -8,6 +8,8 @@
   "n_results": 20,
   "n_test_examples": 197286,
   "valid_HR10": 0.05873199179768562,
+  "category_level": "leaf",
+  "category_diversity": 0.4498869661303895,
   "n_items": 89958,
   "gini": 0.9997776417562391,
   "entropy": 2.9980796515616,

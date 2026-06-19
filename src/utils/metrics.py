@@ -192,6 +192,10 @@ def summarize_generative_ild(gen):
     `gen` shape (B, K, L). For each user, computes the mean pairwise normalized
     Hamming distance (fraction of levels that differ) across all item pairs, then
     averages across users. Range [0, 1].
+
+    This scores *code-level* diversity (how much the RVQ tokens differ); for a
+    binary item-level ILD directly comparable to SASRec, see
+    `summarize_generative_item_ild`.
     """
     gen = np.asarray(gen)
     B, K, L = gen.shape
@@ -202,4 +206,40 @@ def summarize_generative_ild(gen):
     hamming = diff.sum(axis=-1) / L  # B x K x K
     mask = np.triu(np.ones((K, K), dtype=bool), k=1)
     return float(hamming[:, mask].sum(axis=1).mean() / n_pairs)
+
+
+def summarize_generative_item_ild(gen):
+    """Binary item-level Intra-List Diversity for MARIUS-style output.
+
+    Maps each recommended semantic-ID tuple to a unique item id (codes are unique
+    per item after collision removal) and applies the same binary distance as
+    `summarize_dense_ild` - the fraction of distinct item pairs per user. Unlike
+    `summarize_generative_ild` (normalized Hamming over RVQ codes), this measures
+    diversity from item identity, so it is directly comparable to SASRec's ILD.
+
+    `gen` shape (B, K, L). Range [0, 1].
+    """
+    gen = np.asarray(gen)
+    B, K = gen.shape[0], gen.shape[1]
+    item_ids = _item_ids(gen).reshape(B, K)
+    return summarize_dense_ild(item_ids)
+
+
+def category_diversity(rec_categories):
+    """Mean per-user category diversity: distinct categories / K, averaged over users.
+
+    Unlike ILD (which scores diversity from item identity / RVQ codes), this uses
+    an external product taxonomy, and is computed identically for SASRec and
+    MARIUS - so the two are directly comparable. Map each recommended item to its
+    category label upstream (use a shared sentinel for items with no category).
+
+    `rec_categories` shape (B, K): the category label of each recommended item
+    (any hashable). Range (0, 1]: 1.0 = every recommended item a distinct category,
+    1/K = all K share one category.
+    """
+    rec_categories = np.asarray(rec_categories, dtype=object)
+    B, K = rec_categories.shape
+    if K == 0:
+        return 0.0
+    return float(np.mean([len(set(row)) / K for row in rec_categories]))
 

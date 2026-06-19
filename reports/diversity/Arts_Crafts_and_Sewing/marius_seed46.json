@@ -8,18 +8,50 @@
   "n_results": 20,
   "n_test_examples": 197286,
   "valid_HR10": 0.05891953781247139,
+  "category_level": "leaf",
+  "category_diversity": 0.05266998165100412,
   "k_per_level": 256,
   "gini_per_level": [
-    0.9940512758127794,
-    0.9958375170596241,
+    0.9940513470925458,
+    0.9958375190396176,
     0.9960579952771611,
     0.9222900759398791
   ],
   "entropy_per_level": [
-    0.062445518318628435,
-    0.015255640738420598,
-    0.004752561441376783,
-    2.9802040602485214
+    0.062445390137595556,
+    0.015255653851310086,
+    0.004752676509520168,
+    2.9802040602485205
   ],
-  "ild": 0.2535946677999399
+  "support_per_level": [
+    {
+      "n_groups": 1,
+      "mean_group_size": 3945720.0,
+      "mean_distinct_codes": 254.0,
+      "total_distinct_codes": 254
+    },
+    {
+      "n_groups": 254,
+      "mean_group_size": 15534.330708661417,
+      "mean_distinct_codes": 15.228346456692913,
+      "total_distinct_codes": 256
+    },
+    {
+      "n_groups": 3868,
+      "mean_group_size": 1020.0930713547053,
+      "mean_distinct_codes": 1.7381075491209927,
+      "total_distinct_codes": 257
+    },
+    {
+      "n_groups": 6723,
+      "mean_group_size": 586.8987059348506,
+      "mean_distinct_codes": 1.2080916257623084,
+      "total_distinct_codes": 276
+    }
+  ],
+  "ild": 0.25359461444432524,
+  "n_items": 89958,
+  "gini": 0.9995183390357975,
+  "entropy": 3.0626577807469473,
+  "item_ild": 1.0
 }

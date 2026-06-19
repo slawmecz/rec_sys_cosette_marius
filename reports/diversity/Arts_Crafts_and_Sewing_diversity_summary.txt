@@ -1,17 +1,22 @@
 Arts_Crafts_and_Sewing - Recommendation diversity: Gini + Entropy + ILD (test set, real checkpoints)
-Generated: 2026-06-18T01:58:28.282802+00:00
+Generated: 2026-06-19T12:34:44.868205+00:00
 Seeds: [42, 44, 46, 48, 50]
 
 Gini: higher = more concentrated/popularity-skewed recommendations.
 Entropy (nats): higher = more diverse/uniform recommendations.
-ILD: mean pairwise distance within each user's list (binary for SASRec, normalized Hamming for MARIUS).
-MARIUS Gini/Entropy are per RVQ level (conditioned on preceding levels); ILD is a single list-level value.
+ILD (item rows): binary intra-list diversity (fraction of distinct item pairs per user); same computation for both methods, so directly comparable.
+ILD (MARIUS level-0 row): normalized Hamming distance over RVQ codes - code-level diversity, not comparable to the binary item-level ILD.
+CatDiv: distinct item categories / K per user (same computation for both methods; higher = more diverse).
+MARIUS Gini/Entropy are per RVQ level (conditioned on preceding levels); ILD/CatDiv are single list-level values.
 SASRec metrics are a single flat value over recommended item ids.
 
-method     | level  | gini mean +/- std      | entropy (nats)         | ILD                 
---------------------------------------------------------------------------------------------
-MARIUS     | 0      | 0.9940 +/- 0.0001        | 0.0625 +/- 0.0002  | 0.2536 +/- 0.0000  (n=5)
-MARIUS     | 1      | 0.9958 +/- 0.0000        | 0.0153 +/- 0.0001  | -  (n=5)
-MARIUS     | 2      | 0.9961 +/- 0.0000        | 0.0046 +/- 0.0001  | -  (n=5)
-MARIUS     | 3      | 0.9223 +/- 0.0000        | 2.9801 +/- 0.0001  | -  (n=5)
-SASRec     | item   | 0.9998 +/- 0.0000        | 2.9981 +/- 0.0000  | 1.0000 +/- 0.0000  (n=5)
+Support columns (MARIUS per-level only): grp = mean recs per conditioning group, codes = mean distinct codes used per group. Small grp/codes at deeper levels means a low Gini there can be a support artifact rather than genuine uniformity.
+
+method     | level  | gini mean +/- std      | entropy (nats)         | ILD                  | CatDiv               |     grp |   codes
+---------------------------------------------------------------------------------------------------------------------------------------
+MARIUS     | item   | 0.9995 +/- 0.0000        | 3.0625 +/- 0.0002  | 1.0000 +/- 0.0000    | 0.0527 +/- 0.0000    |       - |       -  (n=5)
+MARIUS     | 0      | 0.9940 +/- 0.0001        | 0.0625 +/- 0.0002  | 0.2536 +/- 0.0000    | -                    | 3945720.00 |  251.80  (n=5)
+MARIUS     | 1      | 0.9958 +/- 0.0000        | 0.0153 +/- 0.0001  | -                    | -                    | 15670.49 |   15.14  (n=5)
+MARIUS     | 2      | 0.9961 +/- 0.0000        | 0.0046 +/- 0.0001  | -                    | -                    | 1035.49 |    1.74  (n=5)
+MARIUS     | 3      | 0.9223 +/- 0.0000        | 2.9801 +/- 0.0001  | -                    | -                    |  594.15 |    1.20  (n=5)
+SASRec     | item   | 0.9998 +/- 0.0000        | 2.9981 +/- 0.0000  | 1.0000 +/- 0.0000    | 0.4499 +/- 0.0000    |       - |       -  (n=5)

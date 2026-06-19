@@ -19,12 +19,16 @@ from pathlib import Path
 
 import fsspec
 import hydra
+import numpy as np
+import pandas as pd
 import torch
 from omegaconf import OmegaConf
 
 from scripts.benchmark_extensions import FILENAMES, get_best_checkpoint
-from src.data.ray_data import get_quantized
+from src.data.ray_data import get_items_map, get_quantized
+from src.models import SpecialTokens
 from src.utils.metrics import (
+    category_diversity,
     summarize_dense,
     summarize_dense_entropy,
     summarize_dense_ild,
@@ -32,6 +36,7 @@ from src.utils.metrics import (
     summarize_generative_entropy,
     summarize_generative_ild,
     summarize_generative_item,
+    summarize_generative_item_ild,
     summarize_generative_item_entropy,
     summarize_generative_support,
 )
@@ -121,6 +126,74 @@ def catalog_size(cfg) -> int:
     return len(get_quantized(fs, path))
 
 
+UNKNOWN_CATEGORY = "__unknown__"
+
+
+def _cat_label(cats, level):
+    """Pick one category label from an item's hierarchy array.
+
+    `level` is either "leaf" (most specific known category) or an int depth.
+    Items with no/short hierarchy fall back to a shared unknown sentinel.
+    """
+    try:
+        n = len(cats)
+    except TypeError:
+        return UNKNOWN_CATEGORY
+    if n == 0:
+        return UNKNOWN_CATEGORY
+    if level == "leaf":
+        return str(cats[-1])
+    return str(cats[level]) if n > level else UNKNOWN_CATEGORY
+
+
+def category_map(cfg, level) -> dict[str, str]:
+    """product_id -> category label, from the category metadata parquet."""
+    fs = fsspec.filesystem(cfg.paths.protocol)
+    meta_path = cfg.paths.meta_tplt.format(category=cfg.data.ray_datasets.category)
+    meta = pd.read_parquet(meta_path, filesystem=fs, columns=["parent_asin", "categories"])
+    return {row.parent_asin: _cat_label(row.categories, level) for row in meta.itertuples()}
+
+
+def recommended_categories(cfg, gen, mode, level):
+    """Map each recommended item to its category label. Returns (B, K) of labels.
+
+    SASRec gen is item ids (offset by len(SpecialTokens)); MARIUS gen is Remapped
+    semantic-ID tuples (token = raw_code + level*K + len(SpecialTokens)), which we
+    un-remap and look up in the COSETTE code table to recover the product_id.
+    """
+    pid_to_cat = category_map(cfg, level)
+    fs = fsspec.filesystem(cfg.paths.protocol)
+    gen = np.asarray(gen)
+
+    if mode == "generative":
+        rd = cfg.data.ray_datasets
+        quant_path = cfg.paths.semantic_ids_tplt.format(
+            emb_method=rd.emb_id, category=rd.category, quant_method=rd.quant_id
+        )
+        quant_df = get_quantized(fs, quant_path)
+        K = int(quant_df.values.max()) + 1
+        L = quant_df.shape[1]
+        tuple_to_pid = {
+            tuple(int(v) for v in row): pid
+            for pid, row in zip(quant_df.index, quant_df.values)
+        }
+        offset = np.arange(L) * K + len(SpecialTokens)
+        raw = gen - offset  # un-remap to raw RVQ codes
+        labels = [
+            [pid_to_cat.get(tuple_to_pid.get(tuple(int(v) for v in rec)), UNKNOWN_CATEGORY) for rec in user]
+            for user in raw
+        ]
+    else:
+        items_path = cfg.paths.unique_items_tplt.format(category=cfg.data.ray_datasets.category)
+        id_to_item = get_items_map(fs, items_path)["id_to_item"]
+        labels = [
+            [pid_to_cat.get(id_to_item.get(int(item)), UNKNOWN_CATEGORY) for item in user]
+            for user in gen
+        ]
+
+    return np.asarray(labels, dtype=object)
+
+
 def evaluate_run(
     method: str,
     seed: int,
@@ -131,6 +204,7 @@ def evaluate_run(
     device: str,
     enforce_filtering: bool,
     limit_batches: int | None,
+    category_level,
 ) -> dict:
     cfg, ckpt_path = get_best_checkpoint(models_root, run_dir.name)
 
@@ -151,6 +225,12 @@ def evaluate_run(
         "valid_HR10": best_valid_hr10(run_dir),
     }
 
+    # Category diversity (distinct categories / K, per user) - same computation for
+    # both methods, so MARIUS and SASRec are directly comparable on diversity.
+    rec_cats = recommended_categories(cfg, gen, cfg.model.mode, category_level)
+    result["category_level"] = str(category_level)
+    result["category_diversity"] = category_diversity(rec_cats)
+
     if cfg.model.mode == "generative":
         # K = codes per level (256 in the paper's COSETTE_128d_256x4 setup):
         # vocab_size = L * K + len(SpecialTokens).
@@ -164,11 +244,13 @@ def evaluate_run(
         result["ild"] = summarize_generative_ild(gen)
 
         # Item-level skew (full semantic-ID tuple = one item), so MARIUS is
-        # directly comparable to SASRec's item-level gini/entropy below.
+        # directly comparable to SASRec's item-level gini/entropy/ILD below.
         n_items = catalog_size(cfg)
         result["n_items"] = n_items
         result["gini"] = summarize_generative_item(gen, n_items=n_items)
         result["entropy"] = summarize_generative_item_entropy(gen, n_items=n_items)
+        # Binary item-level ILD (item identity, not RVQ codes), comparable to SASRec.
+        result["item_ild"] = summarize_generative_item_ild(gen)
     else:
         n_items = cfg.model.net.vocab_size - 2  # minus PAD/BOS
         result["n_items"] = n_items
@@ -194,7 +276,14 @@ def main():
     )
     parser.add_argument("--methods", nargs="+", default=["MARIUS", "SASRec"])
     parser.add_argument("--seeds", nargs="+", type=int, default=None)
+    parser.add_argument(
+        "--category-level",
+        default="leaf",
+        help="Taxonomy depth for category diversity: 'leaf' (most specific) or an int depth (e.g. 1).",
+    )
     args = parser.parse_args()
+
+    category_level = args.category_level if args.category_level == "leaf" else int(args.category_level)
 
     fsspec.filesystem("file")
     runs = discover_runs(args.models_root, args.category)
@@ -218,6 +307,7 @@ def main():
             device=args.device,
             enforce_filtering=not args.no_filter_preds,
             limit_batches=args.limit_batches,
+            category_level=category_level,
         )
         print(f"  -> {result}", flush=True)
 

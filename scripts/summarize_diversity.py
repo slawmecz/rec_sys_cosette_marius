@@ -56,7 +56,10 @@ def to_rows(runs: list[dict]) -> list[dict]:
                         "level": "item",
                         "gini": run["gini"],
                         "entropy": run["entropy"],
-                        "ild": None,  # already counted on the level-0 row above
+                        # Binary item-level ILD (comparable to SASRec); the level-0
+                        # row carries the code-level Hamming ILD instead.
+                        "ild": run.get("item_ild"),
+                        "category_diversity": run.get("category_diversity"),
                         "n_total": run["n_items"],
                         "valid_HR10": run["valid_HR10"],
                     }
@@ -70,6 +73,7 @@ def to_rows(runs: list[dict]) -> list[dict]:
                     "gini": run["gini"],
                     "entropy": run["entropy"],
                     "ild": ild,
+                    "category_diversity": run.get("category_diversity"),
                     "n_total": run["n_items"],
                     "valid_HR10": run["valid_HR10"],
                 }
@@ -86,6 +90,7 @@ def write_csv(rows: list[dict], path: Path) -> None:
         "gini",
         "entropy",
         "ild",
+        "category_diversity",
         "n_total",
         "n_groups",
         "mean_group_size",
@@ -123,6 +128,13 @@ def grouped_stats(rows: list[dict]) -> dict[tuple[str, str], dict]:
         ild_vals = [r["ild"] for r in vals if r.get("ild") is not None]
         if ild_vals:
             entry["ild"] = (float(np.mean(ild_vals)), float(np.std(ild_vals)), len(ild_vals))
+        cat_vals = [r["category_diversity"] for r in vals if r.get("category_diversity") is not None]
+        if cat_vals:
+            entry["category_diversity"] = (
+                float(np.mean(cat_vals)),
+                float(np.std(cat_vals)),
+                len(cat_vals),
+            )
         # Support diagnostics (generative per-level rows only): mean across seeds.
         for field in ("mean_group_size", "mean_distinct_codes", "total_distinct_codes"):
             field_vals = [r[field] for r in vals if r.get(field) is not None]
@@ -143,8 +155,10 @@ def write_summary_txt(rows: list[dict], stats: dict, category: str, path: Path) 
         "",
         "Gini: higher = more concentrated/popularity-skewed recommendations.",
         "Entropy (nats): higher = more diverse/uniform recommendations.",
-        "ILD: mean pairwise distance within each user's list (binary for SASRec, normalized Hamming for MARIUS).",
-        "MARIUS Gini/Entropy are per RVQ level (conditioned on preceding levels); ILD is a single list-level value.",
+        "ILD (item rows): binary intra-list diversity (fraction of distinct item pairs per user); same computation for both methods, so directly comparable.",
+        "ILD (MARIUS level-0 row): normalized Hamming distance over RVQ codes - code-level diversity, not comparable to the binary item-level ILD.",
+        "CatDiv: distinct item categories / K per user (same computation for both methods; higher = more diverse).",
+        "MARIUS Gini/Entropy are per RVQ level (conditioned on preceding levels); ILD/CatDiv are single list-level values.",
         "SASRec metrics are a single flat value over recommended item ids.",
         "",
     ]
@@ -158,7 +172,7 @@ def write_summary_txt(rows: list[dict], stats: dict, category: str, path: Path) 
 
     header = (
         f"{'method':<10} | {'level':<6} | {'gini mean +/- std':<22} | {'entropy (nats)':<22} | "
-        f"{'ILD':<20} | {'grp':>7} | {'codes':>7}"
+        f"{'ILD':<20} | {'CatDiv':<20} | {'grp':>7} | {'codes':>7}"
     )
     lines.append(header)
     lines.append("-" * len(header))
@@ -173,11 +187,16 @@ def write_summary_txt(rows: list[dict], stats: dict, category: str, path: Path) 
                 ild_str = f"{im:.4f} +/- {is_:.4f}"
             else:
                 ild_str = "-"
+            if "category_diversity" in s:
+                cm, cs, _ = s["category_diversity"]
+                cat_str = f"{cm:.4f} +/- {cs:.4f}"
+            else:
+                cat_str = "-"
             grp = f"{s['mean_group_size']:.2f}" if "mean_group_size" in s else "-"
             codes = f"{s['mean_distinct_codes']:.2f}" if "mean_distinct_codes" in s else "-"
             lines.append(
                 f"{method:<10} | {level:<6} | {gm:.4f} +/- {gs:.4f}        | "
-                f"{em:.4f} +/- {es:.4f}  | {ild_str:<20} | {grp:>7} | {codes:>7}  (n={n})"
+                f"{em:.4f} +/- {es:.4f}  | {ild_str:<20} | {cat_str:<20} | {grp:>7} | {codes:>7}  (n={n})"
             )
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -197,7 +216,7 @@ def write_plot(stats: dict, category: str, path: Path) -> bool:
     marius_levels = sorted(
         (lvl for (m, lvl) in stats if m == "MARIUS" and lvl != "item"), key=int
     )
-    fig, (ax_gini, ax_ent, ax_ild) = plt.subplots(1, 3, figsize=(15, 4))
+    fig, ((ax_gini, ax_ent), (ax_cat, ax_ild)) = plt.subplots(2, 2, figsize=(13, 9))
 
     for ax, metric, ylabel in [
         (ax_gini, "gini", "Gini index"),
@@ -226,19 +245,53 @@ def write_plot(stats: dict, category: str, path: Path) -> bool:
         ax.set_xticks(range(len(marius_levels)))
         ax.legend()
 
-    # ILD is a single scalar per method — show as a bar chart with error bars
-    ild_methods, ild_means, ild_stds = [], [], []
-    for method, key in [("MARIUS", ("MARIUS", "0")), ("SASRec", ("SASRec", "item"))]:
+    # Category diversity (distinct leaf categories / K) is the headline new metric:
+    # same computation for both methods, so MARIUS vs SASRec is directly comparable.
+    cat_methods, cat_means, cat_stds = [], [], []
+    for method, key in [("MARIUS", ("MARIUS", "item")), ("SASRec", ("SASRec", "item"))]:
+        if key in stats and "category_diversity" in stats[key]:
+            m, s, _ = stats[key]["category_diversity"]
+            cat_methods.append(method)
+            cat_means.append(m)
+            cat_stds.append(s)
+    if cat_methods:
+        colors = ["steelblue" if m == "MARIUS" else "firebrick" for m in cat_methods]
+        bars = ax_cat.bar(cat_methods, cat_means, yerr=cat_stds, capsize=6, color=colors, alpha=0.85)
+        for bar, val in zip(bars, cat_means):
+            ax_cat.text(bar.get_x() + bar.get_width() / 2, val, f"{val:.3f}",
+                        ha="center", va="bottom", fontsize=10)
+        # 1/K floor: a single-category list. K = recommendation list length.
+        floor = 1.0 / 20
+        ax_cat.axhline(floor, color="gray", linestyle=":", label=f"1/K floor = {floor:.3f}")
+        ax_cat.legend()
+    ax_cat.set_ylabel("Category diversity (distinct cats / K)")
+    ax_cat.set_title(f"{category}: Category Diversity (higher = more diverse)")
+
+    # ILD: the binary item-level ILD saturates at 1.0 for both methods (top-K lists
+    # never repeat an item), so the discriminating signal is MARIUS's code-level
+    # (normalized Hamming over RVQ codes) ILD on the level-0 row.
+    ild_labels, ild_means, ild_stds, ild_colors = [], [], [], []
+    if ("MARIUS", "0") in stats and "ild" in stats[("MARIUS", "0")]:
+        m, s, _ = stats[("MARIUS", "0")]["ild"]
+        ild_labels.append("MARIUS\n(code-level)")
+        ild_means.append(m)
+        ild_stds.append(s)
+        ild_colors.append("steelblue")
+    for method in ("MARIUS", "SASRec"):
+        key = (method, "item")
         if key in stats and "ild" in stats[key]:
             m, s, _ = stats[key]["ild"]
-            ild_methods.append(method)
+            ild_labels.append(f"{method}\n(item, binary)")
             ild_means.append(m)
             ild_stds.append(s)
-    if ild_methods:
-        colors = ["steelblue" if m == "MARIUS" else "firebrick" for m in ild_methods]
-        ax_ild.bar(ild_methods, ild_means, yerr=ild_stds, capsize=6, color=colors, alpha=0.8)
+            ild_colors.append("steelblue" if method == "MARIUS" else "firebrick")
+    if ild_labels:
+        bars = ax_ild.bar(ild_labels, ild_means, yerr=ild_stds, capsize=6, color=ild_colors, alpha=0.85)
+        for bar, val in zip(bars, ild_means):
+            ax_ild.text(bar.get_x() + bar.get_width() / 2, val, f"{val:.3f}",
+                        ha="center", va="bottom", fontsize=10)
     ax_ild.set_ylabel("ILD")
-    ax_ild.set_title(f"{category}: Intra-List Diversity")
+    ax_ild.set_title(f"{category}: Intra-List Diversity (item ILD saturates at 1.0)")
 
     fig.suptitle(f"{category}: recommendation diversity across seeds")
     fig.tight_layout()
