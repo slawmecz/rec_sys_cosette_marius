@@ -90,13 +90,23 @@ def candidate_weights(n_candidates, scores=None, tau=1.0):
     return e / e.sum(axis=1, keepdims=True)
 
 
-def mbr_scores(codes, scores=None, tau=1.0):
-    """MBR expected-utility score per candidate: float64[U, C]."""
-    util = prefix_overlap_utility(codes)  # U x C x C
-    w = candidate_weights(codes.shape[1], scores=scores, tau=tau)
-    if w is None:
-        return util.mean(axis=2)
-    return np.einsum("uij,uj->ui", util, w)
+def mbr_scores(codes, scores=None, tau=1.0, user_chunk=8192):
+    """MBR expected-utility score per candidate: float64[U, C].
+
+    Computed in user-chunks so the O(U*C*C*L) prefix-overlap intermediate stays
+    bounded: at depth C=100 the full-U cumprod intermediate is ~63 GB, which OOMs
+    a 96 GB node. Chunking is numerically identical to the unchunked computation
+    (each user's score depends only on that user's own candidates)."""
+    codes = np.asarray(codes)
+    U, C, _L = codes.shape
+    scores = None if scores is None else np.asarray(scores)
+    out = np.empty((U, C), dtype=np.float64)
+    for a in range(0, U, user_chunk):
+        b = min(a + user_chunk, U)
+        util = prefix_overlap_utility(codes[a:b])  # chunk x C x C
+        w = candidate_weights(C, scores=None if scores is None else scores[a:b], tau=tau)
+        out[a:b] = util.mean(axis=2) if w is None else np.einsum("uij,uj->ui", util, w)
+    return out
 
 
 def mbr_order(codes, scores=None, tau=1.0, mode="mbr", topm=None):

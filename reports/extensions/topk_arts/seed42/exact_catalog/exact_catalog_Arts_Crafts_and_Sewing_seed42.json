@@ -1,0 +1,39 @@
+{
+  "category": "Arts_Crafts_and_Sewing",
+  "seed": 42,
+  "filter_seen": false,
+  "n_users": 1000,
+  "n_targets_in_catalog": 1000,
+  "per_k": [
+    {
+      "k": 5,
+      "recall_exact": 0.024,
+      "recall_beam": 0.026,
+      "coverage_exact": 0.02998,
+      "coverage_beam": 0.03039
+    },
+    {
+      "k": 10,
+      "recall_exact": 0.044,
+      "recall_beam": 0.047,
+      "coverage_exact": 0.05246,
+      "coverage_beam": 0.0536
+    },
+    {
+      "k": 20,
+      "recall_exact": 0.065,
+      "recall_beam": 0.065,
+      "coverage_exact": 0.09041,
+      "coverage_beam": 0.09114
+    }
+  ],
+  "target_exact_rank_median_all": 1963.5,
+  "beam_missed_targets": 935,
+  "beam_missed_target_exact_rank_median": 2583.0,
+  "beam_missed_pct_exact_rank_le_10": 0.0,
+  "beam_missed_pct_exact_rank_le_20": 0.0,
+  "beam_missed_pct_exact_rank_le_100": 0.09839572192513368,
+  "delta_recall@10_exact_minus_beam": -0.003,
+  "delta_coverage@10_points": -0.114,
+  "verdict": "MODEL-bound"
+}
