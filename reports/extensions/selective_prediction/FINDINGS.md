@@ -46,14 +46,36 @@ human-handoff or fallback on the low-confidence tail.
    this is not a restatement of the popularity/catalog-collapse story.
 4. The top-1 log-prob beats the margin (top1 - top2) signal at every coverage.
 
+## Cross-paradigm head-to-head (computed; seeds 42-44)
+
+Computed via `selective_prediction.py --cross-paradigm` on the scored depth-100 dumps
+(sasrec_seed{42,43,44}_topk100.npz with dot-product scores; marius_seed{42,43,44}_topk100.npz
+with joint log-probs). Selective-Hit@10 mean +- std over seeds; lower AURC is better.
+
+Beauty:
+- MARIUS: base 0.0825, sel@0.10 0.2217 +-0.0077, sel@0.05 0.2639 +-0.0120, AURC 0.8597
+- SASRec: base 0.0907, sel@0.10 0.3374 +-0.0091, sel@0.05 0.4341 +-0.0124, AURC 0.8156
+- head-to-head (MARIUS - SASRec) selective-Hit@10: 1.00 -0.0082, 0.10 -0.1157, 0.05 -0.1702
+- MARIUS AURC beats SASRec: False
+
+Sports_and_Outdoors:
+- MARIUS: base 0.0472, sel@0.10 0.1096 +-0.0010, sel@0.05 0.1296 +-0.0066, AURC 0.9269
+- SASRec: base 0.0507, sel@0.10 0.1287 +-0.0058, sel@0.05 0.1875 +-0.0054, AURC 0.9154
+- head-to-head (MARIUS - SASRec) selective-Hit@10: 1.00 -0.0036, 0.10 -0.0192, 0.05 -0.0579
+- MARIUS AURC beats SASRec: False
+
+Honest read: the head-to-head is NEGATIVE on both datasets -- SASRec's selective curve sits
+above MARIUS at every coverage and its AURC is lower. This tracks MARIUS's lower absolute base
+recall. The result that stands is the MARIUS-ONLY capability (a calibrated, training-free
+reliability signal with a steep selective slope), NOT a raw-accuracy win over the discriminative
+model. Reported straight; not forced into a win.
+
 ## Honest bounds (do not oversell)
 
-- Single seed (seed 42 is the only seed with scored depth-100 dumps). Error bars require a
-  cheap MARIUS `--with-scores` re-dump for seeds 43/44.
-- The cross-paradigm HEAD-TO-HEAD ("the frozen likelihood beats SASRec at matched answered
-  coverage") is NOT computed here: SASRec scores are not on disk (its dump has only
-  topk_items/target/hist_len). It needs a cheap SASRec `--with-scores` re-dump, and because
-  MARIUS's absolute recall is lower it may come out flat. The headline is the calibrated,
+- The cross-paradigm head-to-head above is multi-seed (42, 43, 44); the MARIUS-only confound
+  battery remains single-seed (seed 42) as a per-instance difficulty analysis.
+- The cross-paradigm HEAD-TO-HEAD is now computed (see section above) and comes out negative,
+  as anticipated, because MARIUS's absolute recall is lower. The headline remains the calibrated,
   training-free reliability CAPABILITY and the steeper selective slope, NOT a raw-accuracy win.
 
 ## Novelty positioning (PARTLY-OPEN)

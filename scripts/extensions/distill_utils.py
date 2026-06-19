@@ -166,7 +166,7 @@ def make_candidates(
     """
     import torch  # noqa: PLC0415 (lazy import intentional)
 
-    scores_np = teacher_cat_scores.detach().cpu().numpy().astype(np.float32)
+    scores_np = teacher_cat_scores.detach().float().cpu().numpy().astype(np.float32)
     target_np = target_catalog_idx.detach().cpu().numpy().astype(np.int64)
     result_np = make_candidates_np(scores_np, target_np, n_cand)
     return torch.from_numpy(result_np)
