@@ -14,6 +14,9 @@ wandb/
 *.ckpt
 *.pkl
 
+# archived Arts checkpoints pulled off scratch for safekeeping (local only, never pushed)
+/checkpoints_arts/
+
 # python / hydra / ray
 __pycache__/
 *.py[cod]
@@ -24,6 +27,7 @@ __pycache__/
 
 # logs and env
 *.log
+jobs/arts2023/logs/*.out
 .env
 jobs/wandb.env
 .DS_Store
@@ -42,6 +46,11 @@ lightning_logs/
 reports/extensions/**/embeddings.npy
 reports/extensions/**/*topk100.npz
 reports/extensions/**/*_topk.npz
+
+# rendered notebook exports (derived from the .ipynb; regenerate with nbconvert)
+notebooks/*.html
+notebooks/*.md
+notebooks/*_files/
 
 # AI assistant artifacts and local working notes (local only, never pushed)
 CLAUDE.md

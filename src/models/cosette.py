@@ -41,11 +41,14 @@ def kmeans(
     samples,
     num_clusters,
     num_iters=10,
+    random_state=None,
 ):
     device = samples.device
     x = samples.cpu().detach().float().numpy()
 
-    cluster = KMeans(n_clusters=num_clusters, max_iter=num_iters).fit(x)
+    cluster = KMeans(
+        n_clusters=num_clusters, max_iter=num_iters, random_state=random_state
+    ).fit(x)
 
     centers = cluster.cluster_centers_
     tensor_centers = torch.from_numpy(centers).to(device)
@@ -87,6 +90,7 @@ class VectorQuantizer(nn.Module):
         kmeans_iters=10,
         sk_epsilon=0.01,
         sk_iters=100,
+        kmeans_seed=None,
     ):
         super().__init__()
         self.n_centroids = n_centroids
@@ -96,6 +100,7 @@ class VectorQuantizer(nn.Module):
         self.kmeans_iters = kmeans_iters
         self.sk_epsilon = sk_epsilon
         self.sk_iters = sk_iters
+        self.kmeans_seed = kmeans_seed
 
         self.embedding = nn.Embedding(self.n_centroids, self.centroids_dim)
         if not kmeans_init:
@@ -124,6 +129,7 @@ class VectorQuantizer(nn.Module):
             data,
             self.n_centroids,
             self.kmeans_iters,
+            random_state=self.kmeans_seed,
         )
 
         self.embedding.weight.data.copy_(centers)
@@ -193,6 +199,7 @@ class ResidualVectorQuantizer(nn.Module):
         kmeans_init=False,
         kmeans_iters=100,
         sk_iters=100,
+        kmeans_seed=None,
     ):
         super().__init__()
         self.n_centroids_list = n_centroids_list
@@ -202,6 +209,7 @@ class ResidualVectorQuantizer(nn.Module):
         self.kmeans_iters = kmeans_iters
         self.sk_epsilons = sk_epsilons
         self.sk_iters = sk_iters
+        self.kmeans_seed = kmeans_seed
         self.vq_layers = nn.ModuleList(
             [
                 VectorQuantizer(
@@ -211,6 +219,7 @@ class ResidualVectorQuantizer(nn.Module):
                     kmeans_iters=self.kmeans_iters,
                     sk_epsilon=sk_epsilon,
                     sk_iters=sk_iters,
+                    kmeans_seed=self.kmeans_seed,
                 )
                 for n_centroids, sk_epsilon in zip(n_centroids_list, sk_epsilons)
             ]
@@ -316,6 +325,7 @@ class COSETTE(torch.nn.Module):
         kmeans_iters=100,
         sk_epsilons=None,
         sk_iters=100,
+        kmeans_seed=None,
     ):
         super(COSETTE, self).__init__()
 
@@ -332,6 +342,7 @@ class COSETTE(torch.nn.Module):
         self.kmeans_iters = kmeans_iters
         self.sk_epsilons = sk_epsilons
         self.sk_iters = sk_iters
+        self.kmeans_seed = kmeans_seed
 
         self.encode_layer_dims = [self.in_dim] + self.layers
         self.decode_layer_dims = self.encode_layer_dims[::-1]
@@ -353,6 +364,7 @@ class COSETTE(torch.nn.Module):
             kmeans_iters=self.kmeans_iters,
             sk_epsilons=self.sk_epsilons,
             sk_iters=self.sk_iters,
+            kmeans_seed=self.kmeans_seed,
         )
 
         if self.loss_weights["contrastive"] > 0:
