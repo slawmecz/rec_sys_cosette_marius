@@ -1,0 +1,5 @@
+dataset,variant,n_items,unique_full_sids,collision_rate,max_items_per_sid,mean_level_perplexity
+Beauty,before_col,12101,11922,0.0148,14,241.1
+Beauty,after_col,12101,12101,0.0000,1,242.2
+Sports_and_Outdoors,before_col,18357,18243,0.0062,14,245.4
+Sports_and_Outdoors,after_col,18357,18357,0.0000,1,245.4

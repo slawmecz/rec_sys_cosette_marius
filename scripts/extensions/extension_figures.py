@@ -291,19 +291,17 @@ def fig_rq2_beyond_accuracy():
 def fig_rq3_oracle():
     """RQ3 (F3): exact full-catalog oracle. Targets are buried by the model's ranking
     (left); exact recall ~= beam recall => model-bound, not a search artifact (right)."""
+    # Both rows use the FILTERED protocol (history items masked before ranking), so the
+    # exact-vs-beam comparison is apples-to-apples and exact == beam holds on the right panel.
     specs = [
         ("Arts MARIUS", oracle(ARTS_DIR / "seed42" / "exact_catalog" /
                                f"exact_catalog_{ARTS}_seed42_filtered.json"),
          oracle_ranks(ARTS_DIR / "seed42" / "exact_catalog" /
                       f"exact_catalog_{ARTS}_seed42_filtered.npz"), MAR, "-"),
-        ("Sports MARIUS (baseline)", oracle(EXT / "exact_catalog" /
-                                            f"exact_catalog_Sports_and_Outdoors_seed42.json"),
-         oracle_ranks(EXT / "exact_catalog" / "exact_catalog_Sports_and_Outdoors_seed42.npz"),
+        ("Sports MARIUS", oracle(EXT / "exact_catalog" /
+                                 f"exact_catalog_Sports_and_Outdoors_seed42_filtered.json"),
+         oracle_ranks(EXT / "exact_catalog" / "exact_catalog_Sports_and_Outdoors_seed42_filtered.npz"),
          "#c98a8c", "--"),
-        ("Sports MARIUS (distilled)", oracle(EXT / "exact_catalog_distill" /
-                                             f"exact_catalog_Sports_and_Outdoors_seed42.json"),
-         oracle_ranks(EXT / "exact_catalog_distill" /
-                      "exact_catalog_Sports_and_Outdoors_seed42.npz"), ARM["distill"], ":"),
     ]
     fig, (axL, axR) = plt.subplots(1, 2, figsize=(11.5, 3.8))
 
@@ -319,7 +317,7 @@ def fig_rq3_oracle():
     axL.set_xlabel("exact full-catalog rank of the true next item (log)")
     axL.set_ylabel("fraction of users <= rank")
     axL.set_title("Targets sit deep in the model's exact ranking\n"
-                  "(distillation pushes them DEEPER: 1000 -> 1405)")
+                  "(median exact rank ~1000-1956 of the full catalog)")
     axL.legend(loc="lower right")
     tidy(axL, ygrid=False)
     axL.grid(True, color="#eee", lw=0.7)
@@ -341,8 +339,8 @@ def fig_rq3_oracle():
     axR.legend(loc="upper right")
     tidy(axR)
 
-    _suptitle(fig, "RQ3  The popularity collapse is MODEL-bound (verified at 90k and on the "
-                 "distilled checkpoint)", x=0.5, y=1.02, fontsize=10.5)
+    _suptitle(fig, "RQ2.2  The popularity collapse is model-bound: exact full-catalogue "
+                 "scoring matches the beam (filtered, seed 42)", x=0.5, y=1.02, fontsize=10.5)
     plt.tight_layout()
     return fig
 
