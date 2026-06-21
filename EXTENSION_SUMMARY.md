@@ -284,8 +284,11 @@ Three MANDATORY framing fixes:
    top-K/structural ceiling (not a budget), coverage SHRINKING (Beauty -1.7pp), and
    the same knob bounded at BOTH stages. Cite Abdollahpouri; claim the narrow version.
 
-Other must-cite / differentiate: SimGR (2602.07847, blames beam pruning; our oracle
-refutes that for our model), APAO (2603.02730, fixes prefix-pruning in training),
+Other must-cite / differentiate: SimGR (2602.07847; CORRECTED 2026-06-21 after web
+verification: SimGR's actual claim is a token-level vs item-level modeling mismatch and it
+ranks items directly, NOT "beam pruning"; frame our oracle as independently localizing the
+cause in the model ranking, consistent/complementary, not as a refutation),
+APAO (2603.02730, fixes prefix-pruning in training),
 V-STAR / Spend-Search (2602.10699, value-guided search), CRAB (2604.05113, codebook
 rebalancing -- the lever we audited and exonerated), D3 / Decoding-Matters
 (2406.14900, decode-time, supports "decoding is a dial"), ActionPiece (2502.13581,

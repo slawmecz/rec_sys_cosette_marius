@@ -15,13 +15,56 @@ Yes, with a scale-dependent verdict. Test R@10 (mean over seeds, %):
 
 | Dataset (scale) | SASRec++ | MARIUS (COSETTE) | verdict |
 |---|---|---|---|
-| Beauty 2014 (12k items), faithful 5-seed | 9.06 | 8.17 | MARIUS below SASRec |
-| Sports 2014 (18k items), 5-seed | ~5.1 | 4.87 | MARIUS ~ SASRec |
-| Arts 2023 (90k items), 5-seed | 4.86 | 5.01 | MARIUS > SASRec, perm p=0.008 |
+| Beauty 2014 (12,101 items), faithful 5-seed | 9.06 | 8.17 | MARIUS below SASRec |
+| Sports 2014 (18,357 items), 5-seed | ~5.1 | 4.87 | MARIUS ~ SASRec |
+| Arts 2023 (89,958 items), 5-seed | 4.86 | 5.01 | MARIUS > SASRec (Holm p=0.032) |
 
 Headline: the paper's "COSETTE competitive with / beats SASRec++" claim does NOT
 reproduce on small 2014 data but DOES reproduce at large 2023 scale (the small-to-large
 flip). See REPLICATION_REPORT.md (2014) and the repro/arts-crafts-2023 report (Arts).
+
+### Arts-2023 reproduction detail (the large-scale prong)
+
+Dataset (Amazon Reviews 2023, Arts_Crafts_and_Sewing, 5-core): 197,286 users,
+89,958 items. Seeds {42,44,46,48,50} (spaced by 2; COSETTE retrained per seed).
+Both models evaluated under the SAME protocol (filter_preds=True: already-seen items
+removed from candidates), so the MARIUS-vs-SASRec comparison is apples-to-apples.
+SASRec++ on Arts is a NEW baseline (the reference repro never ran it).
+
+Test metrics, 5-seed mean with 95% Student-t CI (df=4), % (recomputed from the
+committed per-seed scores, reports/results/{marius,sasrec}_arts_5seed_full_scores.jsonl):
+
+| Metric | MARIUS | SASRec++ | paper (MARIUS / SASRec) |
+|---|---|---|---|
+| R@5 | 3.32 [3.27, 3.36] | 3.31 [3.25, 3.37] | 3.49 / 3.51 |
+| NDCG@5 | 2.22 [2.19, 2.26] | 2.28 [2.23, 2.33] | 2.37 / 2.42 |
+| R@10 | 5.01 [4.97, 5.05] | 4.86 [4.79, 4.93] | 5.30 / 5.09 |
+| NDCG@10 | 2.77 [2.74, 2.80] | 2.78 [2.73, 2.83] | 2.95 / 2.93 |
+
+Significance (MARIUS vs SASRec++), exact two-sample permutation test over all
+C(10,5)=252 relabelings, two-sided, Holm-corrected across the 4 metrics:
+
+| Metric | diff (M-S) | Welch t | perm p | Holm p | significant |
+|---|---|---|---|---|---|
+| R@10 | +0.151 | +5.00 | 0.0079 | 0.032 | yes (MARIUS) |
+| NDCG@5 | -0.056 | -2.74 | 0.032 | 0.095 | no |
+| NDCG@10 | -0.009 | -0.43 | 0.683 | 1.000 | no |
+| R@5 | +0.005 | +0.17 | 0.865 | 1.000 | no |
+
+So R@10 is the ONLY metric where MARIUS significantly beats SASRec++ after correction
+(the 5+5 seeds are perfectly separated, so perm p hits the n=5 exact floor 2/252=0.0079;
+it survives Holm at 0.032). NDCG@5 favors SASRec uncorrected but does not survive Holm.
+Quote both p-values; the raw 0.008 alone reads as underpowered.
+
+Caveats (n=5): a paired across-seed test cannot reach alpha=0.05 (sign-flip floor
+2/32=0.0625), so the two-sample permutation test is the one with power; resolving the
+sub-threshold metrics would need a well-powered per-user paired test (not run). Versus
+the paper, we use CI-containment + effect size (no paper per-seed variance is published):
+the paper point estimate lies outside our 95% CI on every metric, at 3.8 to 8.1 std from
+our mean -- a systematic shortfall (validation-to-test generalization), not seed noise;
+we do NOT claim "significantly worse than the paper." Reproducibility note: SASRec on
+Arts needs vocab_size = n_items + 2 special = 89,960 (a +2 off-by-one vs the config
+default 89,959; PAD + BOS); fixed by a per-run override.
 
 ## RQ2: Diversity and popularity bias (Arts 2023, 90k, 5-seed mean +/- std)
 
@@ -70,9 +113,43 @@ near-optimal over the model -- the collapse is NOT a search/decoding artifact. T
 held-out targets sit at median exact rank ~1956/90k (Arts), 0% in the exact top-20. The
 model's learned ranking buries the tail. This 2014 centerpiece REPLICATES at 90k scale.
 The 4 candidate sources resolve as: data (long-tailed, contributory) / semantic-ID
-(codebook audit refutes it as cause) / MODEL (the locus, by the oracle) / beam (refuted).
-Refutes SimGR (arXiv:2602.07847), which blamed premature beam pruning using a beam-of-100
-proxy; the exact oracle reaches the opposite (model-bound) conclusion.
+(codebook audit refutes it as cause) / MODEL (the locus, by the oracle) / beam (NOT it:
+exact == beam at matched K, so the beam is near-optimal over the model).
+Relates to SimGR (arXiv:2602.07847), which critiques a token-level vs item-level generation
+mismatch and sidesteps generation by ranking items directly: our exact oracle independently
+localizes the cause in the trained model's ranking (the beam is near-optimal), a model-level
+rather than search-level cause, in line with Latte's expressiveness-limit view (2605.06331).
+(Verified 2026-06-21: SimGR's actual claim is the modeling mismatch, NOT "premature beam
+pruning"; do not frame our result as refuting a beam-pruning claim.)
+
+Semantic-ID / codebook exoneration (rules out the tokenizer as the cause): COSETTE uses
+all 256 codes at every one of the 4 RVQ levels (usage ratio 1.0), with near-uniform
+per-level usage (perplexity ~238-253 of 256; normalized usage entropy ~0.99). Code
+collisions before the de-duplication (-col) token are low and fully resolved after it:
+Beauty 1.48% -> 0.0% (max 14 items sharing a semantic ID), Sports 0.62% -> 0.0%. So the
+collapse is not a code-utilization failure or an unresolved-collision artifact.
+
+Where in the RVQ hierarchy the collapse sits (per-RVQ-level CONDITIONAL Gini/entropy of
+MARIUS's recommended semantic IDs, Arts-2023, 5-seed mean; each level conditioned on the
+preceding codes; reports/diversity/):
+
+| RVQ level | conditional Gini | entropy (nats) | effective codes (e^H) |
+|---|---|---|---|
+| 0 (coarsest) | 0.994 | 0.062 | ~1.1 |
+| 1 | 0.996 | 0.015 | ~1.0 |
+| 2 | 0.996 | 0.005 | ~1.0 |
+| 3 (leaf) | 0.922 | 2.980 | ~19.7 |
+
+READING: the MARGINAL per-level codebook usage is near-uniform (above), but CONDITIONALLY
+the model is near-degenerate at the 3 coarse levels (~1 effective code each) and branches
+only at the leaf (~20). MARIUS commits to essentially ONE coarse semantic bucket and varies
+only the residual code -- so the model-bound concentration is produced at the COARSE codes,
+not the leaves, and it reflects which items the model recommends rather than an underused
+codebook (consistent with the marginal-uniformity exoneration). CAVEAT: this is descriptive
+(5-seed std <= 0.0006, no sig test); entropy support is 256 codes/level for MARIUS vs 89,958
+items for SASRec (flat Gini 0.9998, ~20 head items), so the leaf entropy is NOT a like-for-like
+MARIUS-vs-SASRec comparison. Figure: reports/figures/fig_rq3_conditional_diversity. Metric is
+the maks_new_metrics conditional_gini/conditional_entropy (committed in scripts/, src/utils/metrics.py).
 
 ## RQ4: Mitigation across pipeline stages, and the accuracy-bias trade-off
 
@@ -148,5 +225,6 @@ separates real reach from cosmetic spreading.
 
 FairDiverse (SIGIR'25) 3-stage taxonomy + Gini/entropy metrics; Adomavicius and Kwon 2012
 (aggregate vs individual diversity); Abdollahpouri (popularity-bias, coverage-vs-Gini
-divergence); SimGR (2602.07847, refuted by the oracle); Ghost 2605.16825 and Latte
-2605.06331 (contrast / concurrent). See EXTENSION_SUMMARY.md for the full framing + citations.
+divergence); SimGR (2602.07847, token-vs-item modeling mismatch; model-level, our oracle
+localizes it); Ghost 2605.16825 and Latte 2605.06331 (contrast / concurrent). All references
+web-verified 2026-06-21. See EXTENSION_SUMMARY.md for the full framing + citations.

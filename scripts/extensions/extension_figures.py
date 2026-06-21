@@ -5,10 +5,13 @@ Single source of truth for the extension's data loaders and figures. Everything
 loads committed artifacts under reports/, so it re-executes anywhere the repo is
 checked out (no GPU, no torch). The story notebook (build_extension_story_notebook.py)
 imports these functions; running this file as a script saves every figure to
-reports/figures/ as both PNG and SVG for direct use in the paper.
+reports/figures/ as PNG, SVG, and PDF for direct use in the paper.
 
     python3 scripts/extensions/extension_figures.py          # save all figures
     python3 scripts/extensions/extension_figures.py rq4      # save just F1 (RQ4 Pareto)
+
+Set EXTFIG_PAPER=1 to suppress the figure-level title (so the LaTeX caption is the
+only title) -- used to render the title-free PDFs under latex/figures/.
 
 Numbers are verified against EXTENSION_RESULTS.md. Recall is plotted in percent
 (beyond-accuracy CSVs store it as a fraction; the 5-seed jsonls store percent).
@@ -18,6 +21,7 @@ from __future__ import annotations
 
 import glob
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -78,6 +82,15 @@ def labels(ax, xs, vals, fmt="{:.2f}", dy=0.0, color="#555"):
     for x, v in zip(np.atleast_1d(xs), np.atleast_1d(vals)):
         ax.annotate(fmt.format(v), (x, v + dy), ha="center", va="bottom",
                     fontsize=7.5, color=color)
+
+
+def _suptitle(fig, *args, **kwargs):
+    """Figure-level title, suppressed when EXTFIG_PAPER is set so the paper PDFs
+    carry no baked-in title (the LaTeX \\caption describes the figure instead).
+    The notebook (no env var) keeps the self-documenting titles."""
+    if os.environ.get("EXTFIG_PAPER"):
+        return
+    fig.suptitle(*args, **kwargs)
 
 
 # --------------------------------------------------------------------------- #
@@ -185,6 +198,20 @@ def distill():
     return base, dist
 
 
+def arts_conditional():
+    """Per-RVQ-level conditional Gini/entropy of MARIUS's recommended semantic IDs
+    (5-seed mean), plus the SASRec flat reference. Source: the maks_new_metrics
+    instrument output committed under reports/diversity/."""
+    df = pd.read_csv(REPO / "reports" / "diversity" / f"{ARTS}_diversity_table.csv")
+    mar = df[df.method == "MARIUS"].copy()
+    mar["level"] = mar["level"].astype(int)
+    g = mar.groupby("level").agg(
+        gini=("gini", "mean"), gini_sd=("gini", "std"),
+        ent=("entropy", "mean"), ent_sd=("entropy", "std")).reset_index()
+    sas = df[df.method == "SASRec"]
+    return g, float(sas["gini"].mean()), float(sas["entropy"].mean())
+
+
 # --------------------------------------------------------------------------- #
 # Figures
 # --------------------------------------------------------------------------- #
@@ -217,7 +244,7 @@ def fig_rq1_reproduction():
         ax.set_ylim(0, max(means) * 1.25 + 1)
         tidy(ax)
     axes[0].set_ylabel("test Recall@10 (%)")
-    fig.suptitle("RQ1  Reproducibility: the paper's claim reproduces only at scale "
+    _suptitle(fig, "RQ1  Reproducibility: the paper's claim reproduces only at scale "
                  "(Arts: MARIUS > SASRec, perm p=0.008)", x=0.5, y=1.02, fontsize=10.5)
     plt.tight_layout()
     return fig
@@ -254,7 +281,7 @@ def fig_rq2_beyond_accuracy():
         ax.set_title(title, fontsize=9.5)
         tidy(ax)
     axes[0].legend(loc="upper right")
-    fig.suptitle("RQ2  MARIUS reaches fewer distinct items in aggregate (coverage, Gini) "
+    _suptitle(fig, "RQ2  MARIUS reaches fewer distinct items in aggregate (coverage, Gini) "
                  "yet its lists are as diverse and more tail-leaning (ILD, APLT)",
                  x=0.5, y=1.02, fontsize=10.5)
     plt.tight_layout()
@@ -314,7 +341,7 @@ def fig_rq3_oracle():
     axR.legend(loc="upper right")
     tidy(axR)
 
-    fig.suptitle("RQ3  The popularity collapse is MODEL-bound (verified at 90k and on the "
+    _suptitle(fig, "RQ3  The popularity collapse is MODEL-bound (verified at 90k and on the "
                  "distilled checkpoint)", x=0.5, y=1.02, fontsize=10.5)
     plt.tight_layout()
     return fig
@@ -404,9 +431,44 @@ def fig_rq4_pareto():
     tidy(axB, ygrid=False)
     axB.grid(True, color="#eee", lw=0.7)
 
-    fig.suptitle("RQ4  Mitigation across pipeline stages: a clean accuracy-vs-coverage "
+    _suptitle(fig, "RQ4  Mitigation across pipeline stages: a clean accuracy-vs-coverage "
                  "trade-off; no lever moves the model-bound ceiling", x=0.5, y=1.02,
                  fontsize=10.5)
+    plt.tight_layout()
+    return fig
+
+
+def fig_rq3_conditional_diversity():
+    """RQ2.2 refinement: where in the RVQ hierarchy the model-bound concentration sits.
+    MARIUS's recommended semantic IDs are near-degenerate at the coarse levels and branch
+    only at the leaf. MARIUS-only on the per-level axes: SASRec has no RVQ levels, and its
+    entropy support (89,958 items) differs from MARIUS's (256 codes/level), so a per-level
+    overlay would be misleading; SASRec is described in the caption instead."""
+    g, _sas_gini, _sas_ent = arts_conditional()
+    lv = g["level"].values
+    eff = np.exp(g["ent"].values)  # effective number of codes = exp(conditional entropy)
+    fig, (axA, axB) = plt.subplots(1, 2, figsize=(9.5, 3.6))
+
+    axA.errorbar(lv, g["gini"], yerr=g["gini_sd"], fmt="-o", color=MAR, lw=1.6, ms=6,
+                 capsize=3, ecolor="#999")
+    labels(axA, lv, g["gini"], fmt="{:.3f}", dy=0.003)
+    axA.set_xticks(lv); axA.set_xticklabels([f"L{int(l)}" for l in lv])
+    axA.set_ylim(0.90, 1.005)
+    axA.set_xlabel("RVQ level (coarse to fine)"); axA.set_ylabel("conditional Gini")
+    axA.set_title("A. Recommended codes near-degenerate at coarse levels")
+    tidy(axA, ygrid=False); axA.grid(True, color="#eee", lw=0.7)
+
+    axB.bar(lv, eff, 0.6, color=MAR)
+    labels(axB, lv, eff, fmt="{:.1f}", dy=0.4)
+    axB.set_xticks(lv); axB.set_xticklabels([f"L{int(l)}" for l in lv])
+    axB.set_xlabel("RVQ level (coarse to fine)")
+    axB.set_ylabel("effective codes (exp of conditional entropy)")
+    axB.set_title("B. MARIUS branches only at the leaf level")
+    axB.set_ylim(0, max(eff) * 1.25)
+    tidy(axB)
+
+    _suptitle(fig, "RQ2.2  Conditional code usage: MARIUS funnels into one coarse semantic "
+                 "bucket and branches only at the leaf", x=0.5, y=1.02, fontsize=10.5)
     plt.tight_layout()
     return fig
 
@@ -419,14 +481,15 @@ FIGURES = {
     "rq2": ("fig_rq2_beyond_accuracy", fig_rq2_beyond_accuracy),
     "rq3": ("fig_rq3_oracle", fig_rq3_oracle),
     "rq4": ("fig_rq4_pareto", fig_rq4_pareto),  # F1
+    "rq3cond": ("fig_rq3_conditional_diversity", fig_rq3_conditional_diversity),
 }
 
 
 def save_fig(fig, name):
     FIG.mkdir(parents=True, exist_ok=True)
-    for ext in ("png", "svg"):
+    for ext in ("png", "svg", "pdf"):
         fig.savefig(FIG / f"{name}.{ext}")
-    print(f"wrote {FIG / name}.png/.svg")
+    print(f"wrote {FIG / name}.png/.svg/.pdf")
 
 
 def save_all(which=None):
