@@ -32,7 +32,7 @@ stages. The consolidated extension findings are in `EXTENSION_RESULTS.md`.
 
 ## 1. Acknowledgments and code provenance
 
-Three clearly-separated layers of code:
+Three separate layers of code:
 
 1. **Original authors:** Simon Lepage, Jérémie Mary, David Picard. Official
    implementation: <https://github.com/Simon-Lepage/cosette_and_marius>. All
@@ -42,7 +42,7 @@ Three clearly-separated layers of code:
 2. **Master TA (Udit Thakur):** fork <https://github.com/2t2c/cosette_and_marius>,
    which our `main` mirrors. His contribution made the paper runnable on the
    mandatory Amazon-2014 datasets (a data path the original repo lacked),
-   plus enabling fixes and an initial single-seed study (`REPRODUCIBILITY.md`,
+   plus enabling fixes and an initial single-seed study (`upstream/REPRODUCIBILITY.md`,
    now superseded, see section 5). (TIGER/LETTER references were offered by TA Aswin
    Krishna Mahadevan; not used here.)
 
@@ -119,7 +119,7 @@ Our `main` is byte-identical to the TA fork. Versus the **original** authors' re
 | `data_scripts/1_make_embeddings.py`, `2_train_cosette.py` | progress bars, dir-creation, OOM fix, COSETTE small-data schedule | minor |
 | `src/data/ray_data.py`, `src/test.py`, `src/utils/callbacks.py` | enabling fixes | no |
 | `scripts/download_data.py` | **new** downloader | no |
-| `REPRODUCIBILITY.md` | docs (TA's single-seed study) | no |
+| `upstream/REPRODUCIBILITY.md` | docs (TA's single-seed study) | no |
 
 **The model / loss / evaluation code is untouched:** `src/models/*`, the
 Lightning module, scheduler, and metric definitions are byte-identical between the
@@ -129,7 +129,7 @@ method-altering. (Note: the repo's `configs/experiment/sasrec.yaml` is also
 byte-identical to the authors' released file; it is their **default**, which the
 paper **overrides per dataset**; see section 6.)
 
-> The TA's `REPRODUCIBILITY.md` is an earlier **single-seed** study (Beauty /
+> The TA's `upstream/REPRODUCIBILITY.md` is an earlier **single-seed** study (Beauty /
 > Video Games / Arts) and is **superseded** by this report and the committed
 > 5-seed Beauty+Sports artifacts. A note to that effect is prepended to it.
 
@@ -216,7 +216,7 @@ paper's per-dataset Beauty config. Fixing it (d=128 to 32, L2 to none) recovered
 the Beauty gap; the small-model direction reproduces on Beauty (d=32 edges d=64 by
 about 1 std) and ties on Sports (section 6.2). The d=32-vs-128 question was a Figure-11
 axis-reading subtlety (subplot (a) Beauty uses axis 16-256 with the star at **d=32**;
-subplots (b)/(c) use 32-512); the paper's config (d=32) clearly beats the default
+subplots (b)/(c) use 32-512); the paper's config (d=32) beats the default
 (d=128), settled by experiment.
 
 **Remaining residual (about 7% Beauty, about 20-21% Sports):** unlike the factors above, the
@@ -295,7 +295,7 @@ reproduction can be without the authors' exact per-run artifacts.
   results in `reports/paper_faithful_rerun/`.
 - Results notebook: `notebooks/replication_report.ipynb`.
 - Extension findings: `EXTENSION_RESULTS.md` (canonical results, RQ1-4),
-  `notebooks/extension_story.ipynb`, and the dated `EXTENSION_SUMMARY.md` log.
+  `notebooks/extension_story.ipynb`, and the dated `docs/EXTENSION_SUMMARY.md` log.
 
 ## 11. Reference
 

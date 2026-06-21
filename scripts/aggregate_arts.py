@@ -70,7 +70,7 @@ def collect(model_root: Path, runs_dir: Path, suffix: str) -> dict:
 
 def print_table(model: str, rows: dict) -> None:
     paper = PAPER[model]
-    print(f"\n=== {model} (Arts) — {len(rows)} seed(s): {sorted(rows)} ===")
+    print(f"\n=== {model} (Arts) - {len(rows)} seed(s): {sorted(rows)} ===")
     print(f"{'metric':>9} | {'ours mean ± std':>17} | {'paper':>6} | {'delta_pp':>8}")
     print("-" * 50)
     for disp, _ in METRICS:

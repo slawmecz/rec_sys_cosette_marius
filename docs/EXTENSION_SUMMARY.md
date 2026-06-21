@@ -18,7 +18,7 @@
 > reach_cb2) and their jobs were moved to `archive/` during the 2026-06-21 cleanup;
 > paths in this log point at their pre-archive locations. See `archive/README.md`.
 
-Comprehensive log of the extension half of the COSETTE+MARIUS project: every idea
+Log of the extension half of the COSETTE+MARIUS project: every idea
 we considered, whether we tested it, the result, our hypotheses, and where we stand.
 This supersedes the older "decoding is the locus" framing in
 reports/extensions/PILOTS.md.

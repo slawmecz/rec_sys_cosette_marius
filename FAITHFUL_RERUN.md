@@ -119,7 +119,7 @@ tests reproducibility + finer checkpoint selection, not a config fix.
 `paper_train_args()` in `scripts/{sasrec,marius}_5seed.py` now appends
 `EXTRA_TRAIN_OVERRIDES` (empty by default, so existing jobs are unaffected) and honours
 `TRAIN_VAL_CHECK_INTERVAL`. The jobs set a **fresh `OUTPUT_ROOT`
-(`…/cosette_marius/outputs_paper`)** so the 5-seed harness trains from scratch
+(`.../cosette_marius/outputs_paper`)** so the 5-seed harness trains from scratch
 instead of re-recording slawek's d=128 runs, while **reusing `DATA_ROOT`** (the
 existing parquet; SASRec needs no embeddings/COSETTE).
 
@@ -157,20 +157,20 @@ git fetch origin && git checkout stanislaw-finish-reproduction && git pull
 # 0) sanity: parquet timelines exist?
 ls "$SCRATCH"/cosette_marius/data/data/timelines/Beauty.*.parquet
 
-# 1) SMOKE TEST (~2 min) - catches config errors (e.g. d_head divisibility) cheaply
+# 1) SMOKE TEST (~2 min): catches config errors (e.g. d_head divisibility) cheaply
 sbatch --export=ALL,CATEGORY=Beauty,CATEGORY_SLUG=beauty,VOCAB=12103,SAS_D=32,SAS_DH=16,MODE=smoke jobs/20_sasrec_paper_faithful.sbatch
 #   -> check the .out log shows it starts training and writes a smoke summary.
 
 # 2) FULL faithful runs (5 seeds each)
-# PRIMARY - Beauty, paper config:
+# PRIMARY (Beauty, paper config):
 sbatch --export=ALL,CATEGORY=Beauty,CATEGORY_SLUG=beauty,VOCAB=12103,SAS_D=32,SAS_DH=16 jobs/20_sasrec_paper_faithful.sbatch
-# HEDGE - Beauty d=64 (in case the Fig-11a star reads one tick off):
+# HEDGE: Beauty d=64 (in case the Fig-11a star reads one tick off):
 sbatch --export=ALL,CATEGORY=Beauty,CATEGORY_SLUG=beauty,VOCAB=12103,SAS_D=64,SAS_DH=32 jobs/20_sasrec_paper_faithful.sbatch
 # Sports (interpolated):
 sbatch --export=ALL,CATEGORY=Sports_and_Outdoors,CATEGORY_SLUG=sports,VOCAB=18359,SAS_D=64,SAS_DH=32 jobs/20_sasrec_paper_faithful.sbatch
 sbatch --export=ALL,CATEGORY=Sports_and_Outdoors,CATEGORY_SLUG=sports,VOCAB=18359,SAS_D=32,SAS_DH=16 jobs/20_sasrec_paper_faithful.sbatch
 
-# 3) OPTIONAL - MARIUS reproducibility + finer checkpointing (needs COSETTE -col tokens)
+# 3) OPTIONAL: MARIUS reproducibility + finer checkpointing (needs COSETTE -col tokens)
 sbatch --export=ALL,CATEGORY=Beauty,CATEGORY_SLUG=beauty,QUANT_ID=COSETTE_128d_256x4_f958-col jobs/21_marius_paper_fineckpt.sbatch
 sbatch --export=ALL,CATEGORY=Sports_and_Outdoors,CATEGORY_SLUG=sports,QUANT_ID=COSETTE_128d_256x4_8ed1-col jobs/21_marius_paper_fineckpt.sbatch
 ```

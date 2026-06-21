@@ -32,7 +32,7 @@ Extra tables/plots: inference time & GPU memory, training wall-clock, val-test g
 
 ## Replicating experiments (full pipeline)
 
-See also `jobs/RUN_ORDER.md` and `REPRODUCIBILITY.md`.
+See also `jobs/RUN_ORDER.md` and `upstream/REPRODUCIBILITY.md`.
 
 ### Snellius (recommended)
 

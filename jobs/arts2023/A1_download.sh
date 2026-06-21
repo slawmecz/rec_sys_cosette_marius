@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PHASE A1 (run ONCE, on a LOGIN NODE — compute nodes have no internet).
+# PHASE A1 (run ONCE, on a LOGIN NODE - compute nodes have no internet).
 # Seed-independent. Downloads:
 #   (1) the Arts_Crafts_and_Sewing Amazon-2023 files -> DATA_ROOT/amazon-2023 (scratch)
 #   (2) the Sentence-T5-XL model -> HF_HOME (home, persistent) for OFFLINE compute use

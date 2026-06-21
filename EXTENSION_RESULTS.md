@@ -166,7 +166,7 @@ spread and at what recall cost.
 | Beauty | 1.5 | -26.0% | -7.7% | +47.4% |
 | Sports | 0.5 | -5.5% | +6.8% | +23.5% |
 | Sports | 1.5 | -20.1% | +2.1% | +73.1% |
-Raises per-list tail exposure (APLT) strongly with tau; coverage barely moves and is
+Raises per-list tail exposure (APLT) with tau; coverage barely moves and is
 non-monotone (Beauty coverage DROPS). Popularity reweighting at train time is decoupled
 from catalog reach.
 
@@ -206,9 +206,9 @@ NOT a fix. Its pre-registered success criterion (reach lifts AT held recall, wit
 targets moving UP in exact rank) FAILED on both counts: held recall fell -22%, and the
 distilled-checkpoint oracle shows the true targets ranked DEEPER (median 1000->1405;
 beam-missed 1328->1762; top-100 recovery 11.7%->6.7%), verdict still MODEL-bound. So the
-huge coverage gain is SPREADING, not genuine reach: distillation makes MARIUS smear mass
+coverage gain is SPREADING, not genuine reach: distillation makes MARIUS smear mass
 across the catalog like the teacher without learning to rank the correct items higher. It
-is a (strong) third bounded dial. Methodological point: aggregate coverage can be inflated
+is a third bounded dial. Methodological point: aggregate coverage can be inflated
 2x while the model's ability to serve the tail does not improve -- only the exact oracle
 separates real reach from cosmetic spreading.
 
@@ -227,4 +227,4 @@ FairDiverse (SIGIR'25) 3-stage taxonomy + Gini/entropy metrics; Adomavicius and 
 (aggregate vs individual diversity); Abdollahpouri (popularity-bias, coverage-vs-Gini
 divergence); SimGR (2602.07847, token-vs-item modeling mismatch; model-level, our oracle
 localizes it); Ghost 2605.16825 and Latte 2605.06331 (contrast / concurrent). All references
-web-verified 2026-06-21. See EXTENSION_SUMMARY.md for the full framing + citations.
+web-verified 2026-06-21. See docs/EXTENSION_SUMMARY.md for the full framing + citations.

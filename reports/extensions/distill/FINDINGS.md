@@ -50,7 +50,7 @@ across the catalog like the teacher (coverage 0.39 -> 0.87, tail and ARP/Gini al
 strongly), but it does NOT recover the true held-out targets -- it trades top-of-list
 accuracy for catalog reach. This is the same accuracy-vs-coverage trade seen in the PMI
 re-rank and train-time logit-adjustment arms, achieved here through teacher supervision.
-It is therefore a (strong) third bounded dial, NOT evidence of supervision starvation:
+It is therefore a third bounded dial, NOT evidence of supervision starvation:
 forcing teacher-like spreading did not fix the underlying ranking of the true items.
 
 Because the result is not Fork A, the Beauty replication was not run (the pre-registered

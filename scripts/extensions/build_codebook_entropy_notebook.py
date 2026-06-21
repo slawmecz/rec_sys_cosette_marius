@@ -106,7 +106,7 @@ code(
 md(
     "**Read-off.** All 256/256 codes are used at every level, and `H_norm` sits at\n"
     "~0.987 to 0.998 (i.e. 7.90 to 7.98 of 8 bits): usage is essentially uniform. The\n"
-    "tokenizer is healthy, so the catalog-reachability collapse (see EXTENSION_SUMMARY.md)\n"
+    "tokenizer is healthy, so the catalog-reachability collapse (see docs/EXTENSION_SUMMARY.md)\n"
     "is not a code-utilization / codebook-collapse artifact. Note this is *marginal* usage\n"
     "entropy; demand can still be skewed *conditionally* within an L1 prefix."
 )
