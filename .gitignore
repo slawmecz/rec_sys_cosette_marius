@@ -45,6 +45,9 @@ reports/extensions/topk_distill_*/**/embeddings.npy
 # support tables for metric re-derivation.
 reports/extensions/topk_arts/**/embeddings.npy
 reports/extensions/topk_arts/**/*topk100.npz
+# Beauty/Sports scored depth-100 dumps (~200 MB): same policy as Arts -- regenerable
+# (jobs 24/28-archived), and the PMI/MBR/selective results they feed are committed.
+reports/extensions/topk/**/*topk100.npz
 
 # AI assistant artifacts and local working notes (local only, never pushed)
 CLAUDE.md

@@ -3,7 +3,7 @@
 OWNERSHIP: this file is OURS (course-project extension code). It is NOT part of the
 original authors' release. The base class in src/models/marius.py is the authors'
 code, byte-identical and unmodified; everything here is additive (a subclass in a
-new file), exactly like src/models/marius_fuse.py.
+new file), exactly like src/models/marius_distill.py.
 
 Hypothesis / role
 -----------------

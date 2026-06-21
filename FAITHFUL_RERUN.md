@@ -1,11 +1,13 @@
 # Paper-faithful re-run: closing the reproduction ambiguity
 
 **Branch:** `stanislaw-finish-reproduction` (from `slawek`, keeps all of slawek's + our work)
-**Status:** prepared for execution on Snellius. Nothing here has been run yet.
+**Status:** completed on Snellius. The results are in `reports/paper_faithful_rerun/`
+and summarized below.
 
 This document explains (1) what we fixed, (2) what we diagnosed about the
-reproduction gap, (3) the one factual dispute about the paper and how it is
-resolved, and (4) the exact paper-faithful re-run that settles it empirically.
+reproduction gap, (3) the one factual dispute about the paper and how it was
+resolved, and (4) the paper-faithful re-run that settled the largest SASRec++
+configuration ambiguity.
 
 ---
 
@@ -55,7 +57,7 @@ What remains, the actual contributors:
 - **SASRec++ used the repo's *default* config, not the paper's per-dataset Beauty
   config.** This is the main, testable lever (see section 3).
 - A **validation-to-test generalisation gap** (our validation reaches paper-test
-  level; test lags), larger on sparser Sports, consistent with overfitting from an
+  level; test lags), larger on Sports, consistent with overfitting from an
   over-wide SASRec++ and/or coarse checkpoint selection.
 
 ---
@@ -87,7 +89,7 @@ normalization**, not the released default d=128 + L2 that slawek ran. Tellingly,
 **d=128 lands in the about-8 R@10 dark region of the paper's own Figure 11a, right
 where slawek's run landed (8.24).**
 
-**We do not need to win this on figure-reading: the re-run decides it.**
+**We do not need to win this on figure-reading: the re-run decided it.**
 
 ### Faithful SASRec++ config used by the re-run
 
@@ -121,13 +123,22 @@ tests reproducibility + finer checkpoint selection, not a config fix.
 instead of re-recording slawek's d=128 runs, while **reusing `DATA_ROOT`** (the
 existing parquet; SASRec needs no embeddings/COSETTE).
 
-### Expected outcomes (this is the whole point)
+### Observed outcomes
 
-- If faithful **Beauty d=32 / no-norm reaches about 9.73** (R@10) while the existing
-  d=128 / L2 baseline is 8.24, then **the framework reproduces the paper; the original
-  gap was the default-vs-Beauty config mismatch.** Reproduction validated.
-- If d=32 / no-norm **still lags** (about 8), then the gap is not config; we escalate to the
-  generalisation/checkpoint hypotheses. Either way we get a definitive answer.
+All 20 SASRec++ faithful rerun seeds completed (5 seeds for each of Beauty d=32,
+Beauty d=64, Sports d=32, Sports d=64).
+
+| Dataset | Config | R@10 | Interpretation |
+|---|---:|---:|---|
+| Beauty | repo default d=128 + L2 | 8.24 | original team run |
+| Beauty | faithful d=32, no-norm | **9.06 +/- 0.06** | closes about 55% of the paper gap |
+| Beauty | faithful d=64, no-norm | 8.88 +/- 0.09 | lower than d=32 |
+| Sports | faithful d=32, no-norm | 5.08 +/- 0.10 | still far below paper |
+| Sports | faithful d=64, no-norm | **5.15 +/- 0.11** | statistically tied with d=32 |
+
+Conclusion: the default-vs-paper SASRec++ configuration mismatch is a real and
+large contributor on Beauty, but it does not fully reproduce the paper. Sports
+retains a roughly 20-21% residual gap that is not explained by model size.
 
 ### Data dependency
 
@@ -137,7 +148,7 @@ they survive on scratch from slawek's runs, nothing to regenerate; otherwise run
 `jobs/01_*` (download) + `jobs/02_*` (parquet) first, both CPU-only. MARIUS (job
 21) additionally needs the COSETTE `-col` tokens (jobs 04 to 05 to 06).
 
-### How to run
+### How to re-run
 
 ```bash
 cd ~/rec_sys_cosette_marius
@@ -164,7 +175,7 @@ sbatch --export=ALL,CATEGORY=Beauty,CATEGORY_SLUG=beauty,QUANT_ID=COSETTE_128d_2
 sbatch --export=ALL,CATEGORY=Sports_and_Outdoors,CATEGORY_SLUG=sports,QUANT_ID=COSETTE_128d_256x4_8ed1-col jobs/21_marius_paper_fineckpt.sbatch
 ```
 
-### What to report back
+### What a rerun should report
 
 For each run, the per-seed scores and the paper-vs-ours table:
 ```
