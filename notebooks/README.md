@@ -1,8 +1,22 @@
 # Notebooks
 
+For the current post-presentation handoff, start with
+[`PROJECT_STATUS.md`](../PROJECT_STATUS.md). It summarizes what is settled,
+what remains open, and how the larger-dataset reproductions should connect to
+the extension.
+
 ## `replication_report.ipynb`
 
 Table 5 metrics, pipeline status, and learning curves for Beauty and Sports.
+
+## `project_story.ipynb`
+
+End-to-end story notebook: reproduction, beyond-accuracy audit, reachability
+mechanism, and completed pilots.
+
+## `extension_pilots.ipynb`
+
+Focused pilot notebook for REACH, MBR, conformal sets, and FUSE.
 
 ## `extended_report.ipynb`
 

@@ -38,15 +38,35 @@ pilots reuse the validated loaders in scripts/extensions/compute_beyond_accuracy
    vs 0.0366); attn is neutral-to-slightly-worse. A clean, honest negative
    for the architectural hypothesis that strengthens the decoding-side story.
 
-Combined verdict: the evidence points at ONE coherent paper, "catalog
-collapse in semantic-ID generative recommenders": diagnosis (step-2 sibling
-competition, robust across codebooks), stakes (22-23% of demand invisible),
-locus (decoding, not architecture: FUSE null + the depth-100 crossover), and
-decode-time levers (MBR Pareto, conformal reliability). The open method gap
-is a mechanism-TARGETED decoder (pair-level exploration at depth step 2)
-that should dominate the generic MBR Pareto.
+Combined verdict (SUPERSEDED 2026-06-17 -- see below and EXTENSION_SUMMARY.md):
+these four pilots established the diagnosis (step-2 sibling competition, robust
+across codebooks), the stakes (22-23% of demand invisible), and decode-time levers
+(MBR Pareto, conformal reliability). They pointed at decoding as the locus and
+proposed a mechanism-targeted step-2 decoder. THE FOLLOW-UP EXACT-SCORING ORACLE
+REFUTED THE "DECODING LOCUS" CONCLUSION: the collapse is MODEL-bound (the beam is
+near-optimal over the model; the model itself buries the tail), so the targeted
+decoder was not built. Trust EXTENSION_SUMMARY.md where it differs from this file.
 
-## Key pilot results so far
+## Session 2 pilots (2026-06-17) -- the decisive resolution
+
+| Pilot | Code | Result | Status |
+|---|---|---|---|
+| Reachability estimator (Chao1/Good-Turing) | reach_estimator.py | Sports asymptotic coverage@10 ~46% (observed 39%), unseen-mass 0.34% -> structural ceiling | DONE (zero-GPU) |
+| EXACT full-catalog scoring oracle | exact_catalog.py (+ jobs/23) | MODEL-bound: beam-missed targets at median exact rank ~1300-1400, 0% in exact top-20; filtered exact == beam | DONE (the centerpiece) |
+| PMI / logit-adjusted decode re-rank | pmi_rerank.py (+ jobs/24) | bounded dial, beats MBR; item-popularity prior ~= prefix-aware cond2 | DONE |
+| Directional-structure gate (order-aware COSETTE) | direction_gate.py (+ jobs/25) | SHELVE: directed grouping predicts next item WORSE than COSETTE's codes | DONE -> idea dropped |
+| Train-time logit-adjustment | src/models/marius_logitadj.py (+ jobs/26) | DIAL not FIX: crushes ARP/Gini, accuracy drops, debias decoupled from reach | DONE (2 seeds) |
+| Local robustness checks | inline (exact top-100 coverage, missed-prefix spread, occupancy) | top-K exposure ceiling (not absolute); misses spread 240/256 L1 codes; occupancy ~4e-6 | DONE (zero-GPU) |
+
+Session-2 combined verdict: the locus is the model's learned ranking, not the
+search/fusion/tokenizer-symmetry/codes/re-weighting. Popularity correction at both
+decode and train time is a bounded dial decoupled from catalog reach. Novel as a
+package (exact-scoring oracle + structural ceiling + two-lever bounded dial +
+decoupling + density inversion); cite/contrast Ghost (2605.16825) and Latte
+(2605.06331), and Abdollahpouri for the decoupling. Remaining: Tier E large-dataset
+scale test, then writeup. Full log in EXTENSION_SUMMARY.md.
+
+## Detailed pilot notes
 
 REACH (the headline): MARIUS's Sports collapse is a decode-step-2 phenomenon.
 The beam uses all 256 L1 codes, but never emits L1:L2 pairs covering 25.6% of
@@ -68,23 +88,20 @@ is flat-to-inverted (warm-bucket Recall@20 is LOWEST: honest negative,
 consistent with the collapse). At matched coverage SASRec++ needs sets no
 larger than MARIUS everywhere.
 
-MBR (uniform weights = the no-confidence lower bound): accuracy drops as
-expected (Beauty R@10 8.26 -> 7.19), but ALL diversity metrics improve on both
-datasets, and on Sports tail-recall improves on EVERY seed (+21% relative,
-0.0112 -> 0.0136) with coverage 0.39 -> 0.48 and ARP 101 -> 79. A pure
-re-ranking of the same 20 candidates partially counteracts the collapse.
-Score-weighted MBR (the real accuracy test) needs the scored dumps.
+MBR: the original no-confidence uniform run is a diversity-heavy lower bound.
+The scored depth-100 sweep is now the main result. MBR is not an accuracy fix,
+but it gives a tunable Pareto curve. On Sports, tau=0.5 changes R@10
+0.0471 -> 0.0412 while improving coverage 0.392 -> 0.519, ARP 101 -> 73,
+and tail recall 0.0112 -> 0.0148. Uniform MBR pushes coverage still higher
+but pays a much larger accuracy cost. The topm10 sanity check reproduces the
+beam exactly.
 
-FUSE: implementation verified by a 33-check torch-free selftest. One genuine
-spec finding: a per-level additive bias is mathematically DEGENERATE under sum
-pooling (biases sum out to a constant; function class equals the baseline), so
-the arms are: sum (baseline), level_bias (optimization-null control),
-level_gain (cheapest non-degenerate level reweighting, ones-init), attn
-(content-adaptive learned-query pooling, scale-matched at init). All arms
-equal the baseline exactly at initialization. CRITICAL operational note: every
-FUSE variant must train into a FRESH OUTPUT_ROOT or the 5-seed harness will
-silently record the baseline run instead of training (see the module
-docstring of src/models/marius_fuse.py).
+FUSE: implementation verified by a 33-check torch-free selftest. A per-level
+additive bias is mathematically degenerate under sum pooling, so the full runs
+focus on level_gain and attention. Both train correctly from fresh output roots
+and both remain within baseline seed noise on Beauty accuracy. This is a useful
+negative result: the inherited sum-fusion is not the bottleneck we should spend
+the extension on.
 
 ## How to re-run
 
