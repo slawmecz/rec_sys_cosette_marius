@@ -32,8 +32,8 @@ better on Beauty. It does not close the Sports gap.
    the 12k-item Beauty) and contradicts the "d=128 + L2 is the real config" reading.
 3. **A residual 0.67-point gap remains (about 6.9% rel below paper).** Config alone does
    NOT fully reproduce 9.73. This points back at the *secondary* hypotheses in
-   FAITHFUL_RERUN.md §2: the validation-to-test generalization gap and/or coarse checkpoint
-   selection, as the remaining contributors. (Not undertraining: §2 ruled that out.)
+   FAITHFUL_RERUN.md Section 2: the validation-to-test generalization gap and/or coarse checkpoint
+   selection, as the remaining contributors. (Not undertraining: Section 2 ruled that out.)
 4. **Sports gap is NOT model size.** d=32 (5.08) is about equal to d=64 (5.15), both about 20% below the
    paper's 6.44. The faithful config does not help Sports; its gap is elsewhere
    (consistent with the sparser-dataset generalization story).

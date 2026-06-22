@@ -1,0 +1,16 @@
+Arts_Crafts_and_Sewing - Recommendation diversity: Gini index + Shannon entropy (test set, real checkpoints)
+Generated: 2026-06-21T13:09:08.593331+00:00
+Seeds: [42, 44, 46, 48, 50]
+
+Gini: higher = more concentrated/popularity-skewed recommendations.
+Entropy (nats): higher = more diverse/uniform recommendations.
+MARIUS metrics are reported per RVQ level (conditioned on preceding levels);
+SASRec metrics are a single flat value over recommended item ids.
+
+method     | level  | gini mean +/- std      | entropy mean +/- std (nats) 
+---------------------------------------------------------------------------
+MARIUS     | 0      | 0.9940 +/- 0.0001        | 0.0625 +/- 0.0002  (n=5)
+MARIUS     | 1      | 0.9958 +/- 0.0000        | 0.0153 +/- 0.0001  (n=5)
+MARIUS     | 2      | 0.9961 +/- 0.0000        | 0.0046 +/- 0.0001  (n=5)
+MARIUS     | 3      | 0.9223 +/- 0.0000        | 2.9801 +/- 0.0001  (n=5)
+SASRec     | item   | 0.9998 +/- 0.0000        | 2.9981 +/- 0.0000  (n=5)

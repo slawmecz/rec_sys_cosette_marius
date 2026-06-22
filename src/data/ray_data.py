@@ -36,11 +36,17 @@ COL_ORDER = ["user_id", "timeline", "rating", "timestamp"]
 
 
 class ToRow:
-    def __init__(self, timeline_ref):
+    def __init__(self, timeline_ref, seed=None):
         self.timelines_df = ray.get(timeline_ref)
+        # Reproducibility (documented deviation): seeded sampler instead of the
+        # global RNG. seed=None preserves the original unseeded behaviour. NOTE:
+        # Ray Data does not expose a per-actor index to the constructor, so the
+        # `concurrency` parallel actors of this op share `seed` and draw correlated
+        # (but reproducible) streams; this affects only training-sample ordering.
+        self._rng = random.Random(seed)
 
     def __call__(self, _):
-        idx = random.randint(0, len(self.timelines_df) - 1)
+        idx = self._rng.randint(0, len(self.timelines_df) - 1)
         row = self.timelines_df.values[idx]
         return {k: row[i] for i, k in enumerate(COL_ORDER)}
 
@@ -50,7 +56,8 @@ def _drop_len_1(row):
 
 
 def make_pipeline(
-    fs, split, path, quantizer_ref, items_ref, prepro_cfg, num_cpus, total_len=None
+    fs, split, path, quantizer_ref, items_ref, prepro_cfg, num_cpus, total_len=None,
+    seed=None,
 ):
     pp_cfg = prepro_cfg.copy()
     pp_cls = hydra.utils.get_class(pp_cfg.pop("_cls_"))
@@ -59,6 +66,7 @@ def make_pipeline(
             "quantizer_ref": quantizer_ref,
             "items_ref": items_ref,
             "split": split,
+            "seed": seed,
         }
     )
 
@@ -75,7 +83,7 @@ def make_pipeline(
             ray.data.range(total_len)
             .map(
                 ToRow,
-                fn_constructor_kwargs={"timeline_ref": timeline_ref},
+                fn_constructor_kwargs={"timeline_ref": timeline_ref, "seed": seed},
                 concurrency=4,
             )
             .map(pp_cls, fn_constructor_kwargs=pp_cfg, concurrency=num_cpus)
@@ -102,6 +110,7 @@ def make_ray_dataset(
     num_cpus,
     paths,
     which=["train", "valid"],
+    seed=None,
 ):
     patch_fsspec()
     fs = fsspec.filesystem(paths.protocol)
@@ -129,6 +138,7 @@ def make_ray_dataset(
             prepro_cfg=prepro_cfg,
             total_len=total_len,
             num_cpus=num_cpus,
+            seed=seed,
         )
 
     if "valid" in which:
@@ -140,6 +150,7 @@ def make_ray_dataset(
             items_ref=items_ref,
             prepro_cfg=prepro_cfg,
             num_cpus=5,
+            seed=seed,
         )
 
     if "test" in which:
@@ -151,6 +162,7 @@ def make_ray_dataset(
             items_ref=items_ref,
             prepro_cfg=prepro_cfg,
             num_cpus=5,
+            seed=seed,
         )
 
     return datasets

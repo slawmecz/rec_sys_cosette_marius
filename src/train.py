@@ -92,7 +92,9 @@ def main(cfg: DictConfig) -> Optional[float]:
         else None
     )
 
-    ray_datasets = hydra.utils.instantiate(cfg.data.ray_datasets, paths=cfg.paths)
+    ray_datasets = hydra.utils.instantiate(
+        cfg.data.ray_datasets, paths=cfg.paths, seed=int(cfg.get("seed", 42))
+    )
     category = cfg.data.ray_datasets.get("category", "unknown")
     seed = cfg.get("seed", 42)
     name = f"{cfg.task_name}_{category}_seed{seed}_{now_to_str()}"

@@ -10,12 +10,19 @@ class CropAndAugment:
         split,
         random_crop=True,
         augment=None,
+        seed=None,
     ):
         self.crop_length = crop_length
         self.split = split
 
         self.augment = augment
         self.random_crop = random_crop
+
+        # Reproducibility (documented deviation): use seeded generators instead of
+        # numpy/python global RNGs so augmentation is seed-controlled. seed=None
+        # preserves the original unseeded behaviour.
+        self._np_rng = np.random.default_rng(seed)
+        self._py_rng = random.Random(seed)
 
         assert augment in [None, "all_shuffle", "timewise_shuffle"], augment
 
@@ -29,7 +36,7 @@ class CropAndAugment:
 
     def _augment(self, tl, ts):
         if self.augment == "all_shuffle":
-            indices = np.random.permutation(len(tl))
+            indices = self._np_rng.permutation(len(tl))
             tl = tl[indices]
             ts = ts[indices]
 
@@ -37,7 +44,7 @@ class CropAndAugment:
             for _t in np.unique(ts):
                 mask = ts == _t
                 if mask.sum() > 1:  # Only shuffle if there are multiple entries
-                    tl[mask] = tl[mask][np.random.permutation(mask.sum())]
+                    tl[mask] = tl[mask][self._np_rng.permutation(mask.sum())]
 
         return tl, ts
 
@@ -56,7 +63,7 @@ class CropAndAugment:
 
             # Where to select
             if len(tl) > len_to_select:
-                offset = random.randint(0, len(tl) - len_to_select)
+                offset = self._py_rng.randint(0, len(tl) - len_to_select)
             else:
                 offset = 0
 

@@ -16,6 +16,7 @@ class SASRecPrePro:
         crop_length,
         augment,
         random_crop=True,
+        seed=None,
         **kwargs,
     ):
         self.split = split
@@ -25,6 +26,7 @@ class SASRecPrePro:
             augment=augment,
             random_crop=random_crop,
             split=split,
+            seed=seed,
         )
 
         items_map = ray.get(items_ref)

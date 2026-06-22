@@ -1,0 +1,14 @@
+{
+  "method": "SASRec",
+  "seed": 48,
+  "category": "Arts_Crafts_and_Sewing",
+  "mode": "dense",
+  "run_directory": "SASRec_Arts_Crafts_and_Sewing_seed48_2026-06-15_17-21-31",
+  "checkpoint": "/scratch-shared/scur1250/cosette_arts/models/SASRec_Arts_Crafts_and_Sewing_seed48_2026-06-15_17-21-31/checkpoint_2026-06-15_17-53-29.295147/checkpoint.ckpt",
+  "n_results": 20,
+  "n_test_examples": 197286,
+  "valid_HR10": 0.058438003063201904,
+  "n_items": 89958,
+  "gini": 0.9997776417562391,
+  "entropy": 2.9980796515616
+}

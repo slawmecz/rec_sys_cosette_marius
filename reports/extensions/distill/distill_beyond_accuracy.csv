@@ -1,0 +1,3 @@
+category,variant,k,recall_mean,ndcg_mean,coverage_mean,chao1_coverage_mean,gini_mean,arp_mean,aplt_mean,tail_recall_mean
+Sports_and_Outdoors,baseline,10,0.047137,0.024800,0.392384,0.456000,0.913404,101.430155,0.110415,0.011187
+Sports_and_Outdoors,distill,10,0.036900,0.020700,0.874000,0.907000,0.618000,45.500000,0.586000,0.021800

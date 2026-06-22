@@ -20,11 +20,19 @@ quality are positively ruled out by direct evidence; the remaining cause (a
 validation-to-test generalization gap) is the one hypothesis we could not yet rule
 out, and we label it as such.
 
+**Post-presentation status, 2026-06-16:** this report is the authoritative
+small-dataset reproduction state. Teammates are now running larger-dataset
+reproductions in parallel. The extension work has moved beyond planning: current
+artifacts measure catalog reachability and diagnose the collapse, via an exact
+full-catalog scoring oracle, as MODEL-bound (the model's learned ranking, not the
+beam search or the tokenizer), then test several mitigation levers across pipeline
+stages. The consolidated extension findings are in `EXTENSION_RESULTS.md`.
+
 ---
 
 ## 1. Acknowledgments and code provenance
 
-Three clearly-separated layers of code:
+Three separate layers of code:
 
 1. **Original authors:** Simon Lepage, Jérémie Mary, David Picard. Official
    implementation: <https://github.com/Simon-Lepage/cosette_and_marius>. All
@@ -34,7 +42,7 @@ Three clearly-separated layers of code:
 2. **Master TA (Udit Thakur):** fork <https://github.com/2t2c/cosette_and_marius>,
    which our `main` mirrors. His contribution made the paper runnable on the
    mandatory Amazon-2014 datasets (a data path the original repo lacked),
-   plus enabling fixes and an initial single-seed study (`REPRODUCIBILITY.md`,
+   plus enabling fixes and an initial single-seed study (`upstream/REPRODUCIBILITY.md`,
    now superseded, see section 5). (TIGER/LETTER references were offered by TA Aswin
    Krishna Mahadevan; not used here.)
 
@@ -111,7 +119,7 @@ Our `main` is byte-identical to the TA fork. Versus the **original** authors' re
 | `data_scripts/1_make_embeddings.py`, `2_train_cosette.py` | progress bars, dir-creation, OOM fix, COSETTE small-data schedule | minor |
 | `src/data/ray_data.py`, `src/test.py`, `src/utils/callbacks.py` | enabling fixes | no |
 | `scripts/download_data.py` | **new** downloader | no |
-| `REPRODUCIBILITY.md` | docs (TA's single-seed study) | no |
+| `upstream/REPRODUCIBILITY.md` | docs (TA's single-seed study) | no |
 
 **The model / loss / evaluation code is untouched:** `src/models/*`, the
 Lightning module, scheduler, and metric definitions are byte-identical between the
@@ -121,7 +129,7 @@ method-altering. (Note: the repo's `configs/experiment/sasrec.yaml` is also
 byte-identical to the authors' released file; it is their **default**, which the
 paper **overrides per dataset**; see section 6.)
 
-> The TA's `REPRODUCIBILITY.md` is an earlier **single-seed** study (Beauty /
+> The TA's `upstream/REPRODUCIBILITY.md` is an earlier **single-seed** study (Beauty /
 > Video Games / Arts) and is **superseded** by this report and the committed
 > 5-seed Beauty+Sports artifacts. A note to that effect is prepended to it.
 
@@ -141,7 +149,7 @@ Test, mean ± std over seeds 42-46 (%):
 | Sports | MARIUS-COSETTE | 3.09 ±0.03 | 2.02 ±0.02 | 4.87 ±0.03 | 2.59 ±0.02 | 6.72 |
 
 A systematic 15-28% shortfall on **test**, with tight std (so not seed noise),
-larger on sparser Sports. We traced the cause (section 7) and re-ran SASRec++ faithfully.
+larger on Sports. We traced the cause (section 7) and re-ran SASRec++ faithfully.
 
 ### 6.2 Paper-faithful SASRec++ re-run (Snellius H100, 5 seeds each)
 
@@ -208,13 +216,13 @@ paper's per-dataset Beauty config. Fixing it (d=128 to 32, L2 to none) recovered
 the Beauty gap; the small-model direction reproduces on Beauty (d=32 edges d=64 by
 about 1 std) and ties on Sports (section 6.2). The d=32-vs-128 question was a Figure-11
 axis-reading subtlety (subplot (a) Beauty uses axis 16-256 with the star at **d=32**;
-subplots (b)/(c) use 32-512); the paper's config (d=32) clearly beats the default
+subplots (b)/(c) use 32-512); the paper's config (d=32) beats the default
 (d=128), settled by experiment.
 
 **Remaining residual (about 7% Beauty, about 20-21% Sports):** unlike the factors above, the
 residual cause is **not positively demonstrated**; it is the one hypothesis we
 could not rule out. It is **most consistent with** a validation-to-test generalization
-gap (our validation reaches paper level while test lags, larger on sparser Sports),
+gap (our validation reaches paper level while test lags, larger on Sports),
 plausibly amplified by checkpoint-selection granularity (validation every 10k steps,
 so only about 7-8 candidates) and small/sparse-data variance that the paper's exact
 (unpublished) seeds and per-run tuning may absorb. The direct test (finer
@@ -272,8 +280,10 @@ reproduction can be without the authors' exact per-run artifacts.
 - **Open items (next session):** (i) MARIUS faithful re-run + finer-checkpoint
   probe (job 21, needs COSETTE `-col` tokens via jobs 04 to 05 to 06); (ii) finer
   `val_check_interval` on Beauty SASRec++ d=32 to test the checkpoint-selection
-  hypothesis directly; (iii) the **extension** (item-side distribution: ILD/DS +
-  Gini/Entropy, or user-side fairness), not yet started.
+  hypothesis directly; (iii) incorporate the ongoing larger-dataset runs into
+  the same reproduction and reachability tables; (iv) continue the **extension**
+  along the catalog-reachability path: exact model-vs-search scoring, larger
+  scale diagnostics, and a mechanism-targeted decoder if search is responsible.
 
 ---
 
@@ -284,6 +294,8 @@ reproduction can be without the authors' exact per-run artifacts.
   (+ `jobs/21_marius_paper_fineckpt.sbatch`); rationale in `FAITHFUL_RERUN.md`,
   results in `reports/paper_faithful_rerun/`.
 - Results notebook: `notebooks/replication_report.ipynb`.
+- Extension findings: `EXTENSION_RESULTS.md` (canonical results, RQ1-4),
+  `notebooks/extension_story.ipynb`, and the dated `docs/EXTENSION_SUMMARY.md` log.
 
 ## 11. Reference
 

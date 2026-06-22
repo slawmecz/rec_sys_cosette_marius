@@ -6,9 +6,16 @@ amazon-2023/
 outputs/
 /results/
 models/
+# "models/" above is for training-output dirs, but it also matches the source
+# package src/models/; re-include it so NEW source files there are tracked
+# (already-tracked files were unaffected).
+!src/models/
 wandb/
 *.ckpt
 *.pkl
+
+# archived Arts checkpoints pulled off scratch for safekeeping (local only, never pushed)
+/checkpoints_arts/
 
 # python / hydra / ray
 __pycache__/
@@ -20,6 +27,7 @@ __pycache__/
 
 # logs and env
 *.log
+jobs/arts2023/logs/*.out
 .env
 jobs/wandb.env
 .DS_Store
@@ -29,6 +37,20 @@ jobs/wandb.env
 
 # training artifacts written into repo dir by test.py
 lightning_logs/
+
+# beyond-accuracy dumps: the raw per-user Top-K npz (the depth-20 "*_topk.npz", the
+# per-item content embeddings, and the scored depth-100 npz) are large regenerable
+# intermediates (~240 MB on Arts/Sports/Beauty). What they feed IS committed: the
+# beyond-accuracy CSVs, the PMI/MBR/oracle JSONs, and the small exact_catalog rank npz
+# the figures read (exact_catalog_*.npz, a few hundred KB each).
+reports/extensions/**/embeddings.npy
+reports/extensions/**/*topk100.npz
+reports/extensions/**/*_topk.npz
+
+# rendered notebook exports (derived from the .ipynb; regenerate with nbconvert)
+notebooks/*.html
+notebooks/*.md
+notebooks/*_files/
 
 # AI assistant artifacts and local working notes (local only, never pushed)
 CLAUDE.md

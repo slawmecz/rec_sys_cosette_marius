@@ -20,7 +20,10 @@ cd "${PROJECT_ROOT}"
 
 export CUDA_VISIBLE_DEVICES=0
 
-QUANT_METHOD="COSETTE_128d_256x4_f958"
+# NOTE: the COSETTE id suffix is a random uuid (2_train_cosette.py builds the name with
+# uuid4().hex[:4]), so a fresh job 05 run produces a NEW id, not f958. Pass the id job 05
+# actually produced via QUANT_METHOD=... (the f958 default is only slawek's original run).
+QUANT_METHOD="${QUANT_METHOD:-COSETTE_128d_256x4_f958}"
 OUT="${DATA_ROOT}/data/embeddings/sentence-t5-xl/Beauty/${QUANT_METHOD}-col.parquet"
 
 if [[ -f "${OUT}" ]]; then

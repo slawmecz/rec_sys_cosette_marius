@@ -1,0 +1,11 @@
+{
+  "category": "Sports_and_Outdoors",
+  "V": 1026,
+  "n_special": 2,
+  "L": 4,
+  "k_cb": 256,
+  "eps": 1.0,
+  "n_tokens_zero_count": 2,
+  "log_prior_min": -13.711915016174316,
+  "log_prior_max": -5.239091873168945
+}

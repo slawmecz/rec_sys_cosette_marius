@@ -18,10 +18,12 @@ source "${SLURM_SUBMIT_DIR:-$(pwd)}/jobs/env_sports.sh"
 mkdir -p "${OUTPUT_ROOT}/logs" "${OUTPUT_ROOT}/results"
 cd "${PROJECT_ROOT}"
 
+# QUANT_ID must match the -col parquet job 06 produced (random-uuid suffix; 8ed1 is only
+# slawek's original run). Pass QUANT_ID=COSETTE_128d_256x4_<id>-col for a fresh pipeline.
 "${PYTHON_BIN}" scripts/marius_5seed.py --mode full \
   --category Sports_and_Outdoors \
   --category-slug sports \
-  --quant-id COSETTE_128d_256x4_8ed1-col
+  --quant-id "${QUANT_ID:-COSETTE_128d_256x4_8ed1-col}"
 
 echo "Full-run scores:"
 cat "${OUTPUT_ROOT}/results/marius_sports_5seed_full_scores.jsonl" 2>/dev/null || true

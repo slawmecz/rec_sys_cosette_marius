@@ -1,8 +1,28 @@
 # Notebooks
 
+The canonical notebooks for the project. Extension results are consolidated in
+[`EXTENSION_RESULTS.md`](../EXTENSION_RESULTS.md); the reproduction in
+[`REPLICATION_REPORT.md`](../REPLICATION_REPORT.md).
+
+## `extension_story.ipynb`
+
+The complete extension story (RQ1-4): reproducibility at scale, the
+beyond-accuracy / popularity-bias characterization, the model-bound diagnosis
+(exact full-catalog oracle), and mitigation across pipeline stages with the
+accuracy-vs-bias trade-off. Built by
+`scripts/extensions/build_extension_story_notebook.py`; figures come from
+`scripts/extensions/extension_figures.py` (also a CLI that writes
+`reports/figures/fig_rq*.{png,svg}`).
+
 ## `replication_report.ipynb`
 
-Table 5 metrics, pipeline status, and learning curves for Beauty and Sports.
+Table 5 metrics, pipeline status, and learning curves for Beauty and Sports
+(the mandatory reproduction).
+
+## `codebook_entropy.ipynb`
+
+The codebook-health audit (256/256 codes used, near-uniform usage entropy) that
+exonerates the tokenizer as a cause of the collapse (supports RQ3).
 
 ## `extended_report.ipynb`
 
@@ -12,7 +32,7 @@ Extra tables/plots: inference time & GPU memory, training wall-clock, val-test g
 
 ## Replicating experiments (full pipeline)
 
-See also `jobs/RUN_ORDER.md` and `REPRODUCIBILITY.md`.
+See also `jobs/RUN_ORDER.md` and `upstream/REPRODUCIBILITY.md`.
 
 ### Snellius (recommended)
 

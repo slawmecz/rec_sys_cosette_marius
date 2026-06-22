@@ -1,0 +1,5 @@
+category,method,seed,topk,n_queries,mean_tse,mean_rr,mean_r_at_10,mean_r_at_20,mean_r_at_20
+Beauty,marius,42,20,22363,0.035465,0.035465,0.080132,0.119662,0.119662
+Beauty,sasrec,42,20,22363,0.038469,0.038469,0.083218,0.119304,0.119304
+Sports_and_Outdoors,marius,42,20,35598,0.020911,0.020911,0.048317,0.074330,0.074330
+Sports_and_Outdoors,sasrec,42,20,35598,0.020006,0.020006,0.046716,0.070790,0.070790

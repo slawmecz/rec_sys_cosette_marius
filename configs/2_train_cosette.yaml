@@ -3,7 +3,12 @@ defaults:
 - paths
 - disable_hydra_dirs
 
-optim: 
+# Reproducibility (documented deviation): seeds COSETTE model init, k-means
+# centroid init, the timeline sampler, and the reconstruction draw so each of the
+# paper's 5 runs is reproducible. Does not change the method.
+seed: 42
+
+optim:
   lr: 1e-3
   warmup: 100
   beta2: 0.99
