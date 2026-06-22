@@ -15,7 +15,7 @@
 # Evaluates each seed's best checkpoint on the real test set, computing:
 #   - Gini + entropy per RVQ level (MARIUS) and item-level (both models)
 #   - per-level support diagnostics (n_groups, mean group size / distinct codes)
-#   - ILD and category diversity (distinct categories / K)
+#   - item-level ILD and category-level ILD (Gini-Simpson over categories)
 # then writes a cross-seed comparison table + plot under reports/diversity/.
 # H100 variant of jobs/22_gini_arts_comparison.sbatch.
 # sbatch jobs/23_diversity_arts_h100.sbatch

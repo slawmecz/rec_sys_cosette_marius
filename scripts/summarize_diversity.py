@@ -59,7 +59,8 @@ def to_rows(runs: list[dict]) -> list[dict]:
                         # Binary item-level ILD (comparable to SASRec); the level-0
                         # row carries the code-level Hamming ILD instead.
                         "ild": run.get("item_ild"),
-                        "category_diversity": run.get("category_diversity"),
+                        "category_ild": run.get("category_ild"),
+                        "unknown_category_frac": run.get("unknown_category_frac"),
                         "n_total": run["n_items"],
                         "valid_HR10": run["valid_HR10"],
                     }
@@ -73,7 +74,8 @@ def to_rows(runs: list[dict]) -> list[dict]:
                     "gini": run["gini"],
                     "entropy": run["entropy"],
                     "ild": ild,
-                    "category_diversity": run.get("category_diversity"),
+                    "category_ild": run.get("category_ild"),
+                    "unknown_category_frac": run.get("unknown_category_frac"),
                     "n_total": run["n_items"],
                     "valid_HR10": run["valid_HR10"],
                 }
@@ -90,7 +92,8 @@ def write_csv(rows: list[dict], path: Path) -> None:
         "gini",
         "entropy",
         "ild",
-        "category_diversity",
+        "category_ild",
+        "unknown_category_frac",
         "n_total",
         "n_groups",
         "mean_group_size",
@@ -128,12 +131,19 @@ def grouped_stats(rows: list[dict]) -> dict[tuple[str, str], dict]:
         ild_vals = [r["ild"] for r in vals if r.get("ild") is not None]
         if ild_vals:
             entry["ild"] = (float(np.mean(ild_vals)), float(np.std(ild_vals)), len(ild_vals))
-        cat_vals = [r["category_diversity"] for r in vals if r.get("category_diversity") is not None]
-        if cat_vals:
-            entry["category_diversity"] = (
-                float(np.mean(cat_vals)),
-                float(np.std(cat_vals)),
-                len(cat_vals),
+        cat_ild_vals = [r["category_ild"] for r in vals if r.get("category_ild") is not None]
+        if cat_ild_vals:
+            entry["category_ild"] = (
+                float(np.mean(cat_ild_vals)),
+                float(np.std(cat_ild_vals)),
+                len(cat_ild_vals),
+            )
+        unk_vals = [r["unknown_category_frac"] for r in vals if r.get("unknown_category_frac") is not None]
+        if unk_vals:
+            entry["unknown_category_frac"] = (
+                float(np.mean(unk_vals)),
+                float(np.std(unk_vals)),
+                len(unk_vals),
             )
         # Support diagnostics (generative per-level rows only): mean across seeds.
         for field in ("mean_group_size", "mean_distinct_codes", "total_distinct_codes"):
@@ -157,8 +167,8 @@ def write_summary_txt(rows: list[dict], stats: dict, category: str, path: Path) 
         "Entropy (nats): higher = more diverse/uniform recommendations.",
         "ILD (item rows): binary intra-list diversity (fraction of distinct item pairs per user); same computation for both methods, so directly comparable.",
         "ILD (MARIUS level-0 row): normalized Hamming distance over RVQ codes - code-level diversity, not comparable to the binary item-level ILD.",
-        "CatDiv: distinct item categories / K per user (same computation for both methods; higher = more diverse).",
-        "MARIUS Gini/Entropy are per RVQ level (conditioned on preceding levels); ILD/CatDiv are single list-level values.",
+        "CatILD: binary intra-list diversity over category labels (fraction of recommended pairs in different categories) - the Gini-Simpson diversity index; same computation for both methods, so directly comparable. For MARIUS it is currently depressed by the high unknown-category fraction.",
+        "MARIUS Gini/Entropy are per RVQ level (conditioned on preceding levels); ILD/CatILD are single list-level values.",
         "SASRec metrics are a single flat value over recommended item ids.",
         "",
     ]
@@ -170,9 +180,23 @@ def write_summary_txt(rows: list[dict], stats: dict, category: str, path: Path) 
     )
     lines.append("")
 
+    # CatILD sanity check: if a method's recs largely fail the category lookup
+    # (high unknown fraction), its CatILD collapses toward 0 for a spurious reason
+    # (all-unknown pairs "match"). Near-zero here means a low CatILD is genuine.
+    unk_lines = []
+    for method in methods:
+        s = stats.get((method, "item"))
+        if s and "unknown_category_frac" in s:
+            um, us, _ = s["unknown_category_frac"]
+            unk_lines.append(f"  {method:<8}: {um:.4f} +/- {us:.4f}")
+    if unk_lines:
+        lines.append("Unknown-category fraction of recommended items (CatILD sanity check; lower = more trustworthy):")
+        lines.extend(unk_lines)
+        lines.append("")
+
     header = (
         f"{'method':<10} | {'level':<6} | {'gini mean +/- std':<22} | {'entropy (nats)':<22} | "
-        f"{'ILD':<20} | {'CatDiv':<20} | {'grp':>7} | {'codes':>7}"
+        f"{'ILD':<20} | {'CatILD':<20} | {'grp':>7} | {'codes':>7}"
     )
     lines.append(header)
     lines.append("-" * len(header))
@@ -187,16 +211,16 @@ def write_summary_txt(rows: list[dict], stats: dict, category: str, path: Path) 
                 ild_str = f"{im:.4f} +/- {is_:.4f}"
             else:
                 ild_str = "-"
-            if "category_diversity" in s:
-                cm, cs, _ = s["category_diversity"]
-                cat_str = f"{cm:.4f} +/- {cs:.4f}"
+            if "category_ild" in s:
+                cim, cis, _ = s["category_ild"]
+                cat_ild_str = f"{cim:.4f} +/- {cis:.4f}"
             else:
-                cat_str = "-"
+                cat_ild_str = "-"
             grp = f"{s['mean_group_size']:.2f}" if "mean_group_size" in s else "-"
             codes = f"{s['mean_distinct_codes']:.2f}" if "mean_distinct_codes" in s else "-"
             lines.append(
                 f"{method:<10} | {level:<6} | {gm:.4f} +/- {gs:.4f}        | "
-                f"{em:.4f} +/- {es:.4f}  | {ild_str:<20} | {cat_str:<20} | {grp:>7} | {codes:>7}  (n={n})"
+                f"{em:.4f} +/- {es:.4f}  | {ild_str:<20} | {cat_ild_str:<20} | {grp:>7} | {codes:>7}  (n={n})"
             )
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -245,12 +269,13 @@ def write_plot(stats: dict, category: str, path: Path) -> bool:
         ax.set_xticks(range(len(marius_levels)))
         ax.legend()
 
-    # Category diversity (distinct leaf categories / K) is the headline new metric:
-    # same computation for both methods, so MARIUS vs SASRec is directly comparable.
+    # Category ILD (Gini-Simpson over recommended categories): same computation for
+    # both methods, so MARIUS vs SASRec is directly comparable. Unlike binary item
+    # ILD it does not saturate, since distinct items frequently share a category.
     cat_methods, cat_means, cat_stds = [], [], []
     for method, key in [("MARIUS", ("MARIUS", "item")), ("SASRec", ("SASRec", "item"))]:
-        if key in stats and "category_diversity" in stats[key]:
-            m, s, _ = stats[key]["category_diversity"]
+        if key in stats and "category_ild" in stats[key]:
+            m, s, _ = stats[key]["category_ild"]
             cat_methods.append(method)
             cat_means.append(m)
             cat_stds.append(s)
@@ -260,12 +285,8 @@ def write_plot(stats: dict, category: str, path: Path) -> bool:
         for bar, val in zip(bars, cat_means):
             ax_cat.text(bar.get_x() + bar.get_width() / 2, val, f"{val:.3f}",
                         ha="center", va="bottom", fontsize=10)
-        # 1/K floor: a single-category list. K = recommendation list length.
-        floor = 1.0 / 20
-        ax_cat.axhline(floor, color="gray", linestyle=":", label=f"1/K floor = {floor:.3f}")
-        ax_cat.legend()
-    ax_cat.set_ylabel("Category diversity (distinct cats / K)")
-    ax_cat.set_title(f"{category}: Category Diversity (higher = more diverse)")
+    ax_cat.set_ylabel("Category ILD (fraction of cross-category pairs)")
+    ax_cat.set_title(f"{category}: Category ILD (higher = more diverse)")
 
     # ILD: the binary item-level ILD saturates at 1.0 for both methods (top-K lists
     # never repeat an item), so the discriminating signal is MARIUS's code-level

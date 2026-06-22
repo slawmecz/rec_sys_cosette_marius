@@ -224,22 +224,3 @@ def summarize_generative_item_ild(gen):
     item_ids = _item_ids(gen).reshape(B, K)
     return summarize_dense_ild(item_ids)
 
-
-def category_diversity(rec_categories):
-    """Mean per-user category diversity: distinct categories / K, averaged over users.
-
-    Unlike ILD (which scores diversity from item identity / RVQ codes), this uses
-    an external product taxonomy, and is computed identically for SASRec and
-    MARIUS - so the two are directly comparable. Map each recommended item to its
-    category label upstream (use a shared sentinel for items with no category).
-
-    `rec_categories` shape (B, K): the category label of each recommended item
-    (any hashable). Range (0, 1]: 1.0 = every recommended item a distinct category,
-    1/K = all K share one category.
-    """
-    rec_categories = np.asarray(rec_categories, dtype=object)
-    B, K = rec_categories.shape
-    if K == 0:
-        return 0.0
-    return float(np.mean([len(set(row)) / K for row in rec_categories]))
-

@@ -9,7 +9,8 @@
   "n_test_examples": 197286,
   "valid_HR10": 0.05891953781247139,
   "category_level": "leaf",
-  "category_diversity": 0.05266998165100412,
+  "category_diversity": 0.052669981651004116,
+  "unknown_category_frac": 0.9942654319110327,
   "k_per_level": 256,
   "gini_per_level": [
     0.9940513470925458,
@@ -19,9 +20,9 @@
   ],
   "entropy_per_level": [
     0.062445390137595556,
-    0.015255653851310086,
+    0.015255653851310088,
     0.004752676509520168,
-    2.9802040602485205
+    2.9802040602485214
   ],
   "support_per_level": [
     {

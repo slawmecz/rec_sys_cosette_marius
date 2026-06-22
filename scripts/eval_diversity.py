@@ -28,7 +28,6 @@ from scripts.benchmark_extensions import FILENAMES, get_best_checkpoint
 from src.data.ray_data import get_items_map, get_quantized
 from src.models import SpecialTokens
 from src.utils.metrics import (
-    category_diversity,
     summarize_dense,
     summarize_dense_entropy,
     summarize_dense_ild,
@@ -225,11 +224,21 @@ def evaluate_run(
         "valid_HR10": best_valid_hr10(run_dir),
     }
 
-    # Category diversity (distinct categories / K, per user) - same computation for
-    # both methods, so MARIUS and SASRec are directly comparable on diversity.
+    # Category-level ILD: same binary pairwise distance as the item-level ILD, but
+    # over category labels instead of item identity. Unlike the item-level ILD (which
+    # saturates at 1.0 since top-K lists never repeat an item), this varies because
+    # distinct items frequently share a category; it is the Gini-Simpson diversity
+    # index over the recommended categories. Computed identically for both methods,
+    # so directly comparable.
     rec_cats = recommended_categories(cfg, gen, cfg.model.mode, category_level)
     result["category_level"] = str(category_level)
-    result["category_diversity"] = category_diversity(rec_cats)
+    result["category_ild"] = summarize_dense_ild(rec_cats)
+    # Sanity check for the CatILD result: fraction of recommended items that failed
+    # the category lookup and fell to the UNKNOWN sentinel. If this is large, a
+    # near-floor CatILD is a lookup artifact rather than genuine low diversity.
+    result["unknown_category_frac"] = float(
+        np.mean(rec_cats == UNKNOWN_CATEGORY)
+    )
 
     if cfg.model.mode == "generative":
         # K = codes per level (256 in the paper's COSETTE_128d_256x4 setup):
