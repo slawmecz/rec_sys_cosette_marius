@@ -106,3 +106,24 @@ Inference time and GPU memory on **existing checkpoints** (seed 42, about 30 min
 
 Outputs: `reports/extensions/inference_benchmark.csv`, `wall_clock.json`, `model_vocab.json`  
 Notebook: `notebooks/extended_report.ipynb`
+
+---
+
+## Arts-2023 in-processing interventions (jobs 33-34)
+
+Large-arch (`experiment=marius`, 2 GPUs, effective batch 512, 81k steps) train-time
+mitigation on Arts_Crafts_and_Sewing (~90k items), mirroring the small-data jobs 26/27
+but with the correct large architecture so the baseline-vs-intervention delta is not
+arch-confounded. Prereqs: the per-seed priors in `reports/extensions/logitadj/arts_seed*/`
+(committed), and STEP 0 of `.context/snellius-arts-interventions-prompt.md` (Jan's frozen
+scratch alive: processed data, per-seed `-col` tokens, and the 5 SASRec teachers).
+
+| Job | Command | Notes |
+|-----|---------|-------|
+| 33 | `sbatch --export=ALL,TAU=<0.5\|1.0\|1.5> jobs/33_logitadj_arts.sbatch` | logit-adj; per-seed array, submit once per tau (15 trains) |
+| 34 | `sbatch jobs/34_distill_arts.sbatch` | distillation; per-seed array, single config (alpha=0.5), per-seed SASRec teacher from `runs/seed_<S>.sasrec` |
+
+Smoke each with `--export=ALL,...,ARTS_SMOKE=1 --array=42` first. Outputs are isolated so
+the committed baselines are never overwritten: `reports/extensions/topk_logitadj_arts_tau<TAU>/seed<S>/`
+and `reports/extensions/topk_distill_arts/seed<S>/`. If the SASRec teachers were purged,
+retrain via `jobs/arts2023/D_sasrec.sbatch` and override `TEACHER_MODELS_ROOT`/`TEACHER_RUN_DIR`.
