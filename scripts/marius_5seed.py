@@ -183,6 +183,7 @@ def run_train(
     *,
     project_root: Path,
     python_bin: str,
+    experiment: str = "marius_small",
     paths_overrides: str,
     train_overrides: str,
     seed: int,
@@ -193,7 +194,7 @@ def run_train(
     cmd = [
         python_bin,
         "src/train.py",
-        "experiment=marius_small",
+        f"experiment={experiment}",
         *_split_overrides(paths_overrides),
         *_split_overrides(train_overrides),
         f"seed={seed}",
@@ -428,6 +429,7 @@ def process_seed(
     *,
     seed: int,
     mode: str,
+    experiment: str = "marius_small",
     category: str,
     metrics: list[tuple[str, str]],
     project_root: Path,
@@ -465,6 +467,7 @@ def process_seed(
     train_rc = run_train(
         project_root=project_root,
         python_bin=python_bin,
+        experiment=experiment,
         paths_overrides=paths_overrides,
         train_overrides=train_overrides,
         seed=seed,
@@ -581,6 +584,11 @@ def main(argv: list[str] | None = None) -> int:
         help="deduped COSETTE quant id (e.g. COSETTE_128d_256x4_f958-col)",
     )
     parser.add_argument(
+        "--experiment",
+        default=os.environ.get("MARIUS_EXPERIMENT", "marius_small"),
+        help="Hydra experiment config (marius_small for ~10-18k catalogs, marius for large)",
+    )
+    parser.add_argument(
         "--project-root",
         default=os.environ.get(
             "PROJECT_ROOT", "/home/scur1266/rec_sys_cosette_marius"
@@ -640,6 +648,7 @@ def main(argv: list[str] | None = None) -> int:
         ok = process_seed(
             seed=seed,
             mode=args.mode,
+            experiment=args.experiment,
             category=category,
             metrics=metrics,
             project_root=project_root,
