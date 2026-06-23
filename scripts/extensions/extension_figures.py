@@ -346,18 +346,33 @@ def fig_rq3_oracle():
 
 
 def fig_rq4_pareto():
-    """RQ4 (F1): the accuracy-vs-coverage trade-off across all mitigation arms.
-    Panel A: absolute Pareto on Arts (90k). Panel B: normalized %-change vs each arm's
-    own baseline, so all arms (across datasets) share one axis -- every lever is a
-    bounded dial; distillation is the extreme, and (per RQ3) none lifts the ceiling."""
-    fig, (axA, axB) = plt.subplots(1, 2, figsize=(12.5, 4.6))
+    """RQ4 (F1): the accuracy-vs-coverage trade-off, one panel per dataset.
 
-    # ---- Panel A: absolute Arts Pareto ---------------------------------- #
+    Each panel is an absolute Recall@10 vs catalog-coverage view of the mitigation levers
+    we ran on that dataset, with the dataset's own MARIUS baseline and SASRec++ reference
+    marked. Arts (90k): decode-time PMI / MBR re-rank sweeps. Beauty (12k) and Sports (18k):
+    train-time logit-adjustment; Sports also has cross-paradigm distillation. Datasets are
+    kept on separate panels (and separate axes) so nothing is compared across catalogues of
+    different sizes. Every lever trades recall for coverage where it helps at all (on Beauty,
+    logit-adj lowers both), and (per RQ3) none lifts the model-bound ceiling."""
+    fig, (axA, axB, axS) = plt.subplots(1, 3, figsize=(13.5, 4.3))
+
+    def sasrec_point(cat, k=10):
+        """(recall_percent, coverage) for the SASRec++ reference of a 2014 dataset."""
+        d = load_beyond_csv(EXT / f"beyond_accuracy_{cat}.csv")
+        r = d[(d.model == "sasrec") & (d.k == k)].iloc[0]
+        return 100 * float(r["recall_mean"]), float(r["coverage_mean"])
+
+    def baseline_and_ref(ax, bx, by, sx, sy):
+        ax.scatter([bx], [by], s=85, color=MAR, zorder=5, edgecolor="white", lw=1,
+                   label="MARIUS baseline")
+        ax.scatter([sx], [sy], s=110, color=SAS, marker="*", zorder=5,
+                   edgecolor="white", lw=0.5, label="SASRec++")
+
+    # ---- Panel A: Arts (90k), decode-time PMI / MBR re-rank ------------- #
     ab = arts_beyond()
     base = ab[(ab.model == "marius") & (ab.k == 10)].iloc[0]
     sas = ab[(ab.model == "sasrec") & (ab.k == 10)].iloc[0]
-    bx, by = 100 * base["recall"], base["coverage"]
-
     for prior, c, mk in [("cond2", ARM["pmi"], "o"), ("pair", "#e3a36f", "s"),
                          ("item", "#c66f3a", "^")]:
         d = arts_pmi(prior)
@@ -366,71 +381,53 @@ def fig_rq4_pareto():
     base_mbr, dmbr = arts_mbr()
     axA.plot(100 * dmbr["recall"], dmbr["coverage"], "-", color=ARM["mbr"], lw=1.2,
              marker="D", ms=4, label="MBR (tau sweep)")
-    axA.scatter([bx], [by], s=90, color=MAR, zorder=5, edgecolor="white", lw=1)
-    axA.annotate("MARIUS\nbaseline", (bx, by), textcoords="offset points",
-                 xytext=(6, -2), fontsize=7.5, color=MAR)
-    axA.scatter([100 * sas["recall"]], [sas["coverage"]], s=90, color=SAS, marker="*",
-                zorder=5, edgecolor="white", lw=0.5)
-    axA.annotate("SASRec++", (100 * sas["recall"], sas["coverage"]),
-                 textcoords="offset points", xytext=(6, 2), fontsize=7.5, color=SAS)
-    axA.set_xlabel("Recall@10 (%)")
-    axA.set_ylabel("catalog coverage")
-    axA.set_title("A. Arts (90k): post-hoc re-rank trades recall for coverage")
-    axA.legend(loc="lower left", fontsize=7.8)
-    tidy(axA, ygrid=False)
-    axA.grid(True, color="#eee", lw=0.7)
+    baseline_and_ref(axA, 100 * base["recall"], base["coverage"],
+                     100 * sas["recall"], sas["coverage"])
+    axA.set_title("A. Arts (90k): post-hoc PMI / MBR re-rank")
+    axA.legend(loc="lower left", fontsize=7)
 
-    # ---- Panel B: normalized %-change, all arms across datasets --------- #
-    def pct(v, b):
-        return 100 * (v - b) / b
+    # ---- Panel B: Beauty (12k), train-time logit-adjustment ------------- #
+    bbase, bla = logitadj("beauty", "Beauty")
+    axB.plot(100 * bla["recall_mean"], bla["coverage_mean"], "-v", color=ARM["logitadj"],
+             lw=1.2, ms=6, label="logit-adj (tau sweep)")
+    for tau, row in bla.iterrows():
+        axB.annotate(f"tau={tau}", (100 * row["recall_mean"], row["coverage_mean"]),
+                     textcoords="offset points", xytext=(4, 5), fontsize=6.5,
+                     color=ARM["logitadj"])
+    baseline_and_ref(axB, 100 * bbase["recall_mean"], bbase["coverage_mean"],
+                     *sasrec_point("Beauty"))
+    axB.set_title("B. Beauty (12k): train-time logit-adj")
+    axB.legend(loc="lower right", fontsize=7)
 
-    # PMI cond2 (Arts) trajectory
-    d = arts_pmi("cond2")
-    axB.plot([pct(r, base["recall"]) * 1 for r in d["recall"]],
-             [pct(c, base["coverage"]) for c in d["coverage"]],
-             "-o", color=ARM["pmi"], lw=1.2, ms=4, label="PMI cond2 (Arts)")
-    # PMI item (Arts) -- strongest coverage lever
-    di = arts_pmi("item")
-    axB.plot([pct(r, base["recall"]) for r in di["recall"]],
-             [pct(c, base["coverage"]) for c in di["coverage"]],
-             "-^", color="#c66f3a", lw=1.0, ms=4, label="PMI item (Arts)")
-    # MBR (Arts)
-    axB.plot([pct(r, base_mbr["recall"]) for r in dmbr["recall"]],
-             [pct(c, base_mbr["coverage"]) for c in dmbr["coverage"]],
-             "-D", color=ARM["mbr"], lw=1.2, ms=4, label="MBR (Arts)")
-    # logit-adj (Beauty, Sports) -- train-time
-    for slug, cat, mk in [("beauty", "Beauty", "v"), ("sports", "Sports_and_Outdoors", "P")]:
-        b, dla = logitadj(slug, cat)
-        axB.plot([pct(dla.loc[t, "recall_mean"], b["recall_mean"]) for t in dla.index],
-                 [pct(dla.loc[t, "coverage_mean"], b["coverage_mean"]) for t in dla.index],
-                 "-", color=ARM["logitadj"], lw=1.0, marker=mk, ms=5,
-                 label=f"logit-adj ({SHORT[cat]})")
-    # distillation (Sports) -- the extreme
+    # ---- Panel C: Sports (18k), logit-adj + cross-paradigm distillation - #
+    sbase, sla = logitadj("sports", "Sports_and_Outdoors")
+    axS.plot(100 * sla["recall_mean"], sla["coverage_mean"], "-P", color=ARM["logitadj"],
+             lw=1.2, ms=7, label="logit-adj (tau sweep)")
+    for tau, row in sla.iterrows():
+        axS.annotate(f"tau={tau}", (100 * row["recall_mean"], row["coverage_mean"]),
+                     textcoords="offset points", xytext=(4, 5), fontsize=6.5,
+                     color=ARM["logitadj"])
     db, dd = distill()
-    axB.scatter([pct(dd["recall_mean"], db["recall_mean"])],
-                [pct(dd["coverage_mean"], db["coverage_mean"])],
-                s=140, color=ARM["distill"], marker="*", zorder=5, edgecolor="white",
-                lw=0.6, label="distillation (Sports)")
-    axB.annotate("distillation\n(+123% cov, -22% R@10)\nbut targets ranked DEEPER",
-                 (pct(dd["recall_mean"], db["recall_mean"]),
-                  pct(dd["coverage_mean"], db["coverage_mean"])),
-                 textcoords="offset points", xytext=(-8, -38), fontsize=7,
-                 color=ARM["distill"], ha="center")
-    axB.axhline(0, color="#bbb", lw=0.8)
-    axB.axvline(0, color="#bbb", lw=0.8)
-    axB.scatter([0], [0], s=60, color="#333", zorder=6)
-    axB.annotate("each arm's\nbaseline", (0, 0), textcoords="offset points",
-                 xytext=(6, 6), fontsize=7, color="#333")
-    axB.set_xlabel("change in Recall@10 (%)")
-    axB.set_ylabel("change in catalog coverage (%)")
-    axB.set_title("B. All arms, normalized: every lever is a bounded dial\n"
-                  "(up-left = more coverage, less recall)")
-    axB.legend(loc="upper right", fontsize=7.3)
-    tidy(axB, ygrid=False)
-    axB.grid(True, color="#eee", lw=0.7)
+    axS.scatter([100 * dd["recall_mean"]], [dd["coverage_mean"]], s=150,
+                color=ARM["distill"], marker="*", zorder=6, edgecolor="white", lw=0.6,
+                label="distillation")
+    axS.annotate("spreads most,\ntargets ranked deeper",
+                 (100 * dd["recall_mean"], dd["coverage_mean"]),
+                 textcoords="offset points", xytext=(10, -4), fontsize=6.5,
+                 color=ARM["distill"], va="top")
+    baseline_and_ref(axS, 100 * sbase["recall_mean"], sbase["coverage_mean"],
+                     *sasrec_point("Sports_and_Outdoors"))
+    axS.set_title("C. Sports (18k): logit-adj + distillation")
+    axS.legend(loc="center right", fontsize=7)
 
-    _suptitle(fig, "RQ4  Mitigation across pipeline stages: a clean accuracy-vs-coverage "
-                 "trade-off; no lever moves the model-bound ceiling", x=0.5, y=1.02,
+    for ax in (axA, axB, axS):
+        ax.set_xlabel("Recall@10 (%)")
+        ax.set_ylabel("catalog coverage")
+        tidy(ax, ygrid=False)
+        ax.grid(True, color="#eee", lw=0.7)
+
+    _suptitle(fig, "RQ4  Mitigation per dataset: every lever trades recall for coverage "
+                 "(where it helps), and none lifts the model-bound ceiling", x=0.5, y=1.02,
                  fontsize=10.5)
     plt.tight_layout()
     return fig
