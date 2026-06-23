@@ -9,7 +9,7 @@
   "n_test_examples": 197286,
   "valid_HR10": 0.05873199179768562,
   "category_level": "leaf",
-  "category_diversity": 0.4498869661303895,
+  "category_ild": 0.8788473533214136,
   "unknown_category_frac": 0.05,
   "n_items": 89958,
   "gini": 0.9997776417562391,

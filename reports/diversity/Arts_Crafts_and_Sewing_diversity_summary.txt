@@ -1,5 +1,5 @@
 Arts_Crafts_and_Sewing - Recommendation diversity: Gini + Entropy + ILD (test set, real checkpoints)
-Generated: 2026-06-22T14:12:27.262218+00:00
+Generated: 2026-06-22T16:46:58.455249+00:00
 Seeds: [42, 44, 46, 48, 50]
 
 Gini: higher = more concentrated/popularity-skewed recommendations.
@@ -18,9 +18,9 @@ Unknown-category fraction of recommended items (CatILD sanity check; lower = mor
 
 method     | level  | gini mean +/- std      | entropy (nats)         | ILD                  | CatILD               |     grp |   codes
 ---------------------------------------------------------------------------------------------------------------------------------------
-MARIUS     | item   | 0.9995 +/- 0.0000        | 3.0625 +/- 0.0002  | 1.0000 +/- 0.0000    | -                    |       - |       -  (n=5)
+MARIUS     | item   | 0.9995 +/- 0.0000        | 3.0625 +/- 0.0002  | 1.0000 +/- 0.0000    | 0.0048 +/- 0.0000    |       - |       -  (n=5)
 MARIUS     | 0      | 0.9940 +/- 0.0001        | 0.0625 +/- 0.0002  | 0.2536 +/- 0.0000    | -                    | 3945720.00 |  251.80  (n=5)
 MARIUS     | 1      | 0.9958 +/- 0.0000        | 0.0153 +/- 0.0001  | -                    | -                    | 15670.49 |   15.14  (n=5)
 MARIUS     | 2      | 0.9961 +/- 0.0000        | 0.0046 +/- 0.0001  | -                    | -                    | 1035.49 |    1.74  (n=5)
 MARIUS     | 3      | 0.9223 +/- 0.0000        | 2.9801 +/- 0.0001  | -                    | -                    |  594.15 |    1.20  (n=5)
-SASRec     | item   | 0.9998 +/- 0.0000        | 2.9981 +/- 0.0000  | 1.0000 +/- 0.0000    | -                    |       - |       -  (n=5)
+SASRec     | item   | 0.9998 +/- 0.0000        | 2.9981 +/- 0.0000  | 1.0000 +/- 0.0000    | 0.8788 +/- 0.0000    |       - |       -  (n=5)
