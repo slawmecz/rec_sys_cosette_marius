@@ -1,0 +1,15 @@
+category,model,seed,k,user_fraction,n_users_sampled,distinct_reached,reached_coverage
+Arts_Crafts_and_Sewing,marius,44,10,0.05,9864,11963,0.13298428155361391
+Arts_Crafts_and_Sewing,marius,44,10,0.1,19729,14690,0.16329842815536139
+Arts_Crafts_and_Sewing,marius,44,10,0.2,39457,17386,0.19326796949687633
+Arts_Crafts_and_Sewing,marius,44,10,0.4,78914,20069,0.22309299895506793
+Arts_Crafts_and_Sewing,marius,44,10,0.6,118372,21663,0.24081237911025144
+Arts_Crafts_and_Sewing,marius,44,10,0.8,157829,22715,0.2525067253607239
+Arts_Crafts_and_Sewing,marius,44,10,1.0,197286,23516,0.26141088063318435
+Arts_Crafts_and_Sewing,marius,44,20,0.05,9864,17951,0.19954867827208253
+Arts_Crafts_and_Sewing,marius,44,20,0.1,19729,21497,0.2389670735231997
+Arts_Crafts_and_Sewing,marius,44,20,0.2,39457,24875,0.2765179305898308
+Arts_Crafts_and_Sewing,marius,44,20,0.4,78914,27944,0.31063385135285354
+Arts_Crafts_and_Sewing,marius,44,20,0.6,118372,29706,0.3302207696925232
+Arts_Crafts_and_Sewing,marius,44,20,0.8,157829,30899,0.3434825140621179
+Arts_Crafts_and_Sewing,marius,44,20,1.0,197286,31861,0.3541763934280442
