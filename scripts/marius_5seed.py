@@ -47,6 +47,21 @@ CATEGORY_DEFAULTS = {
 }
 
 RUN_PREFIX = "MARIUS_small"
+# Run dirs are named "{task_name}_<category>_seed<seed>_<ts>"; task_name is set by the
+# experiment config (marius -> "MARIUS", marius_small -> "MARIUS_small"). The locator
+# globs by this prefix, so it must track whichever experiment is actually trained --
+# otherwise --experiment marius runs (named "MARIUS_*") are missed by a "MARIUS_small_*"
+# glob and report as run_not_found.
+RUN_PREFIX_BY_EXPERIMENT = {
+    "marius": "MARIUS",
+    "marius_small": "MARIUS_small",
+}
+
+
+def run_prefix_for_experiment(experiment: str) -> str:
+    return RUN_PREFIX_BY_EXPERIMENT.get(experiment, RUN_PREFIX)
+
+
 DEFAULT_SEEDS = [42, 43, 44, 45, 46]
 
 
@@ -106,6 +121,7 @@ def find_run_for_seed(
     seed: int,
     category: str,
     since_mtime: float | None = None,
+    run_prefix: str = RUN_PREFIX,
 ) -> str | None:
     models_dir = output_root / "models"
     if not models_dir.exists():
@@ -113,7 +129,7 @@ def find_run_for_seed(
 
     best_name: str | None = None
     best_mtime = 0.0
-    for run_dir in models_dir.glob(f"{RUN_PREFIX}_*"):
+    for run_dir in models_dir.glob(f"{run_prefix}_*"):
         if not run_dir.is_dir():
             continue
         mtime = run_dir.stat().st_mtime
@@ -328,12 +344,15 @@ def write_summary_table(
         body=individual_body,
     )
 
+    # Render every metric column, even for datasets without paper reference numbers
+    # (e.g. Arts has no PAPER_MARIUS_COSETTE entry -> paper_targets is empty). Missing
+    # targets show "-", matching the pending-seed rows above, instead of KeyError-ing.
     paper_row = {
         "method": "MARIUS (COSETTE) paper",
         "seed": "mean ± std (5 runs)",
         **{
-            label: _fmt_mean_std(mean, std)
-            for label, (mean, std) in paper_targets.items()
+            label: (_fmt_mean_std(*paper_targets[label]) if label in paper_targets else "-")
+            for label in metric_cols
         },
     }
 
@@ -446,7 +465,8 @@ def process_seed(
         print(f"[seed {seed}] already recorded in {scores_file}, skipping", flush=True)
         return True
 
-    existing_run = find_run_for_seed(output_root, seed, category)
+    run_prefix = run_prefix_for_experiment(experiment)
+    existing_run = find_run_for_seed(output_root, seed, category, run_prefix=run_prefix)
     if existing_run and has_metrics(output_root, existing_run):
         print(
             f"[seed {seed}] found existing metrics in {existing_run}, recording only",
@@ -490,9 +510,11 @@ def process_seed(
         print(f"[seed {seed}] training failed with exit code {train_rc}", flush=True)
         return False
 
-    run_dir = find_run_for_seed(output_root, seed, category, since_mtime=since_mtime)
+    run_dir = find_run_for_seed(
+        output_root, seed, category, since_mtime=since_mtime, run_prefix=run_prefix
+    )
     if not run_dir:
-        run_dir = find_run_for_seed(output_root, seed, category)
+        run_dir = find_run_for_seed(output_root, seed, category, run_prefix=run_prefix)
     if not run_dir:
         append_score(
             scores_file,
